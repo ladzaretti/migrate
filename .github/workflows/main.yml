@@ -1,0 +1,45 @@
+name: Golang-ci
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  lint-and-test:
+    name: lint & test
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.23"
+
+      - name: Platform info
+        run: go version
+
+      - name: Run go mod tidy
+        run: go mod tidy -diff
+
+      - name: Install make
+        run: sudo apt-get update && sudo apt-get install -y make
+
+      - name: Install & build
+        run: make
+
+      - name: Run lint
+        run: make lint
+
+      - name: Run tests
+        run: make test-with-coverage

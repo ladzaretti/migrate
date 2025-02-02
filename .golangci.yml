@@ -1,0 +1,20 @@
+run:
+  deadline: 2m
+
+linters:
+  disable-all: true
+  # run 'golangci-lint help linters' to see the list of supported linters
+  enable:
+    - errcheck
+    - gosec
+    - goconst
+    - goimports
+    - govet
+    - gosimple
+    - ineffassign
+    - revive
+    - staticcheck
+    - typecheck
+    - unconvert
+    - unused
+  fast: false
