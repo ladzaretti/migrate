@@ -1,20 +1,81 @@
-run:
-  deadline: 2m
-
 linters:
   disable-all: true
   # run 'golangci-lint help linters' to see the list of supported linters
   enable:
+    # Enabled by default
     - errcheck
-    - gosec
-    - goconst
-    - goimports
-    - govet
     - gosimple
+    - govet
     - ineffassign
-    - revive
     - staticcheck
-    - typecheck
-    - unconvert
     - unused
+
+    # Enabled, disabled by default
+    - asasalint
+    - asciicheck
+    - bidichk
+    - containedctx
+    - copyloopvar
+    - cyclop
+    - decorder
+    - dogsled
+    - dupl
+    - durationcheck
+    - err113
+    - errchkjson
+    - errname
+    - errorlint
+    - exhaustive
+    - exptostd
+    - fatcontext
+    - forcetypeassert
+    - funlen
+    - gci
+    - gocheckcompilerdirectives
+    - gochecknoglobals
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - godot
+    - gofmt
+    - gofumpt
+    - goimports
+    - gosec
+    - iface
+    - importas
+    - inamedparam
+    - interfacebloat
+    - intrange
+    - ireturn
+    - lll
+    - musttag
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnesserr
+    - nilnil
+    - nlreturn
+    - nolintlint
+    - perfsprint
+    - predeclared
+    - reassign
+    - recvcheck
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - stylecheck
+    - tagalign
+    - tenv
+    - testableexamples
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - varnamelen
+    - whitespace
+    - wrapcheck
   fast: false
+
+run:
+  timeout: 3m
