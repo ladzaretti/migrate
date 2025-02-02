@@ -48,4 +48,4 @@ fix: | bin/golangci-lint ## Fix lint violations
 	bin/golangci-lint run --fix
 
 .PHONY: check
-check: test lint ## Run tests and linters
+check: lint test ## Run tests and linters

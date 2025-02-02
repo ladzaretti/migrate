@@ -32,9 +32,6 @@ jobs:
       - name: Run go mod tidy
         run: go mod tidy -diff
 
-      - name: Install make
-        run: sudo apt-get update && sudo apt-get install -y make
-
       - name: Install & build
         run: make
 
@@ -42,4 +39,4 @@ jobs:
         run: make lint
 
       - name: Run tests
-        run: make test-with-coverage
+        run: make test
