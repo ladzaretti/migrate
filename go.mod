@@ -1,4 +1,4 @@
-module github.com/Gabriel-Ladzaretti/keelite
+module github.com/ladzaretti/keelite
 
 go 1.23.4
 
