@@ -11,16 +11,13 @@ import (
 	"unicode"
 )
 
-// SignatureFunc is a function type that generates a unique identifier
-// for a given input string.
+// Signer generates a unique identifier for a given input string,
+// used to sign migrations.
 //
-// This function is used for schema comparison and versioning.
-type SignatureFunc func(s string) string
+// It is used for schema comparison and validation.
+type Signer func(s string) string
 
-type Schema struct {
-	Version int
-	Hash    string
-}
+type Filter func(index int) bool
 
 type LimitedDB interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
@@ -28,26 +25,27 @@ type LimitedDB interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-type SchemaVersioning interface {
-	CreateSchemaTable(ctx context.Context, db LimitedDB) error
-	CurrentSchema(ctx context.Context, db LimitedDB) (Schema, error)
-	SaveSchema(ctx context.Context, db LimitedDB, v Schema) error
-	GetSchemaFrom(row *sql.Row) (Schema, error)
+type Schema struct {
+	Version int
+	Hash    string
 }
 
 type Migration struct {
-	db            *sql.DB
-	versioning    SchemaVersioning
-	signatureFunc SignatureFunc
+	db        *sql.DB
+	dialect   DialectAdapter
+	sign      Signer
+	filter    Filter
+	disableTx bool
 }
 
 type Opt func(*Migration)
 
-func New(db *sql.DB, opts ...Opt) *Migration {
+func New(db *sql.DB, dialect DialectAdapter, opts ...Opt) *Migration {
 	m := &Migration{
-		db:            db,
-		versioning:    DefaultVersioning{},
-		signatureFunc: normalizedSha256,
+		db:      db,
+		sign:    normalizedSha256,
+		filter:  func(_ int) bool { return true },
+		dialect: SQLiteDialect{},
 	}
 
 	for _, opt := range opts {
@@ -57,19 +55,36 @@ func New(db *sql.DB, opts ...Opt) *Migration {
 	return m
 }
 
-func WithSignatureFunc(fn SignatureFunc) Opt {
+func WithCustomSigning(fn Signer) Opt {
 	return func(m *Migration) {
-		m.signatureFunc = fn
+		m.sign = fn
 	}
 }
 
-func WithCustomVersioning(v SchemaVersioning) Opt {
+func WithTransactionDisabled(disabled bool) Opt {
 	return func(m *Migration) {
-		m.versioning = v
+		m.disableTx = disabled
 	}
 }
 
-// TODO: WithValidation ?
+func WithFilter(fn Filter) Opt {
+	return func(m *Migration) {
+		m.filter = fn
+	}
+}
+
+type ApplyError struct {
+	Index int
+	Err   error
+}
+
+func (e *ApplyError) Error() string {
+	return fmt.Sprintf("failed to apply migration %d: %v", e.Index, e.Err)
+}
+
+func (e *ApplyError) Unwrap() error {
+	return e.Err
+}
 
 func errf(format string, a ...any) error {
 	//nolint:err113 // all package errors essentially mean migration failure.
@@ -81,39 +96,47 @@ func (m *Migration) Apply(migrations []string) error {
 }
 
 func (m *Migration) ApplyContext(ctx context.Context, migrations []string) error {
-	if err := m.versioning.CreateSchemaTable(ctx, m.db); err != nil {
+	if err := createSchemaVersionTable(ctx, m.db, m.dialect); err != nil {
 		return errf("create schema version table error: %v", err)
 	}
 
-	migrationsLen := len(migrations)
-	current, err := m.versioning.CurrentSchema(ctx, m.db)
+	schema, err := currentSchemaVersion(ctx, m.db, m.dialect)
 	if err != nil {
 		return errf("load version error: %v", err)
 	}
 
-	if current.Version > migrationsLen {
-		return errf("database version is greater than the number of migration scripts provided")
+	if schema.Version > len(migrations) {
+		return errf("database version (%d) exceeds available migrations (%d)", schema.Version, len(migrations))
 	}
 
-	// TODO: validate schema hash
+	hashHistory := m.hashHistory(migrations)
+	if schema.Version > 0 && schema.Hash != hashHistory[schema.Version] {
+		return errf("schema integrity check failed: expected hash %q, got %q", hashHistory[schema.Version], schema.Hash)
+	}
 
-	if current.Version == migrationsLen {
-		return nil // schema is up to date; nothing to do.
+	if schema.Version == len(migrations) {
+		return nil // already up to date
+	}
+
+	if m.disableTx {
+		if err := m.applyMigrations(ctx, m.db, schema.Version, migrations, hashHistory); err != nil {
+			return errf("non-transactional migration failed: %w", err)
+		}
+
+		return nil
 	}
 
 	tx, err := m.db.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
-		return errf("transaction start error: %v", err)
+		return errf("start transaction error: %v", err)
 	}
 
-	for i := current.Version; i < migrationsLen; i++ {
-		if err := m.applyMigration(ctx, tx, migrations[i]); err != nil {
-			if err2 := tx.Rollback(); err2 != nil {
-				return fmt.Errorf("failed to roll back after failed migration %d attempt: %w", i, errors.Join(err2, err))
-			}
-
-			return fmt.Errorf("successfully rolled back after migration %d failure: %w", i, err)
+	if err := m.applyMigrations(ctx, tx, schema.Version, migrations, hashHistory); err != nil {
+		if err2 := tx.Rollback(); err2 != nil {
+			return errf("rollback failed: %v", errors.Join(err2, err))
 		}
+
+		return err
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -123,78 +146,68 @@ func (m *Migration) ApplyContext(ctx context.Context, migrations []string) error
 	return nil
 }
 
-func (m *Migration) applyMigration(ctx context.Context, tx LimitedDB, migration string) error {
-	if _, err := tx.ExecContext(ctx, migration); err != nil {
-		return err
-	}
+func (m *Migration) applyMigrations(ctx context.Context, db LimitedDB, current int, migrations []string, hashes []string) error {
+	for i := current; i < len(migrations); i++ {
+		if !m.filter(i) {
+			continue
+		}
 
-	sch := Schema{
-		Hash: m.signatureFunc(migration),
-	}
-
-	if err := m.versioning.SaveSchema(ctx, tx, sch); err != nil {
-		return fmt.Errorf(": %v", err)
+		sch := Schema{Version: i + 1, Hash: hashes[i+1]}
+		if err := applyMigration(ctx, db, m.dialect, sch, migrations[i]); err != nil {
+			return &ApplyError{Index: i, Err: err}
+		}
 	}
 
 	return nil
 }
 
-func (m *Migration) hash(query string) string {
-	if m.signatureFunc == nil {
-		return ""
+func (m *Migration) hashHistory(migrations []string) []string {
+	history := make([]string, len(migrations)+1)
+
+	history[0] = "" // Version 0 has no migrations applied
+
+	for i := 1; i <= len(migrations); i++ {
+		history[i] = m.sign(history[i-1] + m.sign(migrations[i-1]))
 	}
 
-	return m.signatureFunc(query)
+	return history
 }
 
-var _ SchemaVersioning = DefaultVersioning{}
+func applyMigration(ctx context.Context, db LimitedDB, dia DialectAdapter, sch Schema, migration string) error {
+	if err := execContext(ctx, db, migration); err != nil {
+		return err
+	}
 
-type DefaultVersioning struct{}
-
-func (v DefaultVersioning) CreateSchemaTable(ctx context.Context, db LimitedDB) error {
-	query := `
-		CREATE TABLE
-		IF NOT EXISTS schema_version (
-			version INTEGER PRIMARY KEY,
-			hash TEXT NOT NULL,
-			applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		);
-	`
-	if _, err := db.ExecContext(ctx, query); err != nil {
+	if err := saveSchemaVersion(ctx, db, dia, sch); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (v DefaultVersioning) CurrentSchema(ctx context.Context, db LimitedDB) (Schema, error) {
-	query := `
-		SELECT version, hash FROM schema_version ORDER BY version DESC LIMIT 1;
-	`
-
-	row := db.QueryRowContext(ctx, query)
-	ver, err := v.GetSchemaFrom(row)
-	if err != nil {
-		return Schema{}, err
-	}
-
-	const countStar = `
-		SELECT count(*) FROM schema_version
-	`
-
-	var count int
-	if err := db.QueryRowContext(ctx, countStar).Scan(&count); err != nil {
-		return Schema{}, err
-	}
-
-	if count != ver.Version {
-		return Schema{}, fmt.Errorf("schema version table integrity check failed: expected %d entries, found %d", ver.Version, count)
-	}
-
-	return ver, nil
+func createSchemaVersionTable(ctx context.Context, db LimitedDB, dialect DialectAdapter) error {
+	return execContext(ctx, db, dialect.CreateVersionTableQuery())
 }
 
-func (v DefaultVersioning) GetSchemaFrom(row *sql.Row) (Schema, error) {
+func saveSchemaVersion(ctx context.Context, db LimitedDB, dialect DialectAdapter, s Schema) error {
+	return execContext(ctx, db, dialect.SaveVersionQuery(), s.Version, s.Hash)
+}
+
+func currentSchemaVersion(ctx context.Context, db LimitedDB, dialect DialectAdapter) (Schema, error) {
+	row := db.QueryRowContext(ctx, dialect.CurrentVersionQuery())
+
+	return scanSchema(row)
+}
+
+func execContext(ctx context.Context, db LimitedDB, query string, args ...any) error {
+	if _, err := db.ExecContext(ctx, query, args...); err != nil {
+		return fmt.Errorf("exec context failed: %w", err)
+	}
+
+	return nil
+}
+
+func scanSchema(row *sql.Row) (Schema, error) {
 	ver := Schema{}
 
 	if err := row.Scan(&ver.Version, &ver.Hash); err != nil {
@@ -202,22 +215,10 @@ func (v DefaultVersioning) GetSchemaFrom(row *sql.Row) (Schema, error) {
 			return ver, nil
 		}
 
-		return Schema{}, err
+		return Schema{}, fmt.Errorf("failed to scan schema version: %w", err)
 	}
 
 	return ver, nil
-}
-
-func (v DefaultVersioning) SaveSchema(ctx context.Context, db LimitedDB, s Schema) error {
-	query := `
-		INSERT INTO schema_version (hash) VALUES ($1) 
-	`
-
-	if _, err := db.ExecContext(ctx, query, s.Hash); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func normalizedSha256(query string) string {

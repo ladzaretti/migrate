@@ -22,7 +22,7 @@ func main() {
 
 	_ = migrations
 
-	m := migration.New(db)
+	m := migration.New(db, migration.SQLiteDialect{})
 	if err := m.Apply(migrations); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
