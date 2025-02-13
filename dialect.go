@@ -1,4 +1,4 @@
-package migration
+package migrate
 
 type DialectAdapter interface {
 	CreateVersionTableQuery() string
