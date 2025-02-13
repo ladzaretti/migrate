@@ -9,30 +9,45 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/ladzaretti/migrate"
-	"github.com/ladzaretti/migrate/test/migrations"
 )
 
-func TestMigrate_New(t *testing.T) {
+func createSQLiteDB(t *testing.T) *sql.DB {
+	t.Helper()
+
 	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	defer db.Close()
 
-	migrations := migrations.Scripts()
+	t.Cleanup(func() { db.Close() })
+
+	return db
+}
+
+var migrations = []string{
+	`
+CREATE TABLE
+	IF NOT EXISTS testing_migration (
+		aid INTEGER PRIMARY KEY,
+		another_id INTEGER,
+		something_else TEXT
+	);
+    `,
+	`
+CREATE TABLE
+	IF NOT EXISTS testing_migration_2 (
+		id INTEGER PRIMARY KEY,
+		another_id INTEGER,
+		something_else TEXT
+	);
+	`,
+}
+
+func TestMigrate_Apply(t *testing.T) {
+	db := createSQLiteDB(t)
 
 	m := migrate.New(db, migrate.SQLiteDialect{})
-
 	if err := m.Apply(migrations); err != nil {
 		t.Fatalf("Failed to migrate database: %v", err)
-	}
-
-	var timestamp string
-	if err := db.QueryRow("select CURRENT_TIMESTAMP").Scan(&timestamp); err != nil {
-		t.Fatalf("query failed: %v", err)
-	}
-
-	if timestamp == "" {
-		t.Fatalf("timestamp should not be empty")
 	}
 }
