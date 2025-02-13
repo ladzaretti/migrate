@@ -1,6 +1,6 @@
 module github.com/ladzaretti/migrate/test
 
-go 1.24.0
+go 1.23.4
 
 require (
 	modernc.org/sqlite v1.34.5
