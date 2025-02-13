@@ -1,4 +1,4 @@
-# KeeLite
-> A SQLite-backed password manager
+# Migrate
+> A simple Go zero-dependency SQL schema migrator
 
 **WORK IN PROGRESS**
