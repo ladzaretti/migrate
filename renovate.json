@@ -1,1 +1,10 @@
-{}
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "dependencyDashboard": true,
+  "packageRules": [
+    {
+      "matchFileNames": ["test/**"],
+      "automerge": true
+    }
+  ]
+}
