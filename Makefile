@@ -1,11 +1,7 @@
-.DEFAULT_GOAL = bin/klt
+.DEFAULT_GOAL = check
 
 GOLANGCI_VERSION ?= v1.63.4
-TEST_TIMEOUT = 5s
-
-.PHONY: bin/klt
-bin/klt:
-	go build -o "$@" ./cmd/klt
+TEST_ARGS=-timeout 5s -coverpkg=github.com/ladzaretti/migrate
 
 bin/golangci-lint: bin/golangci-lint-${GOLANGCI_VERSION}
 	@ln -sf golangci-lint-${GOLANGCI_VERSION} bin/golangci-lint
@@ -13,27 +9,22 @@ bin/golangci-lint: bin/golangci-lint-${GOLANGCI_VERSION}
 bin/golangci-lint-${GOLANGCI_VERSION}:
 	@mkdir -p bin
 	curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
-    	| sh -s -- -b ./bin ${GOLANGCI_VERSION}
+    	| sh -s -- -b ./bin  $(GOLANGCI_VERSION)
 	@mv bin/golangci-lint "$@"
-
-.PHONY: run
-run:
-	./bin/klt
 
 .PHONY: clean
 clean:
 	go clean -testcache
-	rm -rf bin/
-	rm -rf coverage/
+	rm -rf bin/ coverage/
 
 .PHONY: test
 test:
-	go test -timeout ${TEST_TIMEOUT} -cover ./...
+	go test $(TEST_ARGS) ./test/
 
 .PHONY: cover
 cover:
 	@mkdir -p coverage
-	go test -timeout ${TEST_TIMEOUT} ./... -coverprofile coverage/cover.out
+	go test $(TEST_ARGS) ./test/ -coverprofile coverage/cover.out
 
 .PHONY: coverage-html
 coverage-html: cover
