@@ -1,4 +1,4 @@
 # Migrate
-> A simple Go zero-dependency SQL schema migrator
+> A minimal Go zero-dependency SQL schema migrator.
 
 **WORK IN PROGRESS**
