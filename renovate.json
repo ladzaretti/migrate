@@ -5,6 +5,10 @@
     {
       "matchFileNames": ["test/**"],
       "automerge": true
+    },
+    {
+      "matchPackageNames": ["github.com/ladzaretti/migrate"],
+      "enabled": false
     }
   ]
 }
