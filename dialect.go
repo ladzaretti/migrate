@@ -22,9 +22,7 @@ func (a SQLiteDialect) CreateVersionTableQuery() string {
 }
 
 func (a SQLiteDialect) CurrentVersionQuery() string {
-	return `
-		SELECT version, hash FROM schema_version;
-	`
+	return `SELECT version, hash FROM schema_version;`
 }
 
 func (a SQLiteDialect) SaveVersionQuery() string {
