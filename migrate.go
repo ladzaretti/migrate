@@ -28,7 +28,10 @@ package migrate
 
 import (
 	"context"
-	"crypto/sha256"
+	//nolint:gosec
+	// SHA-1 is used here for change detection,
+	// not for cryptographic security.
+	"crypto/sha1"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -69,7 +72,7 @@ type Opt func(*Migration)
 func New(db *sql.DB, dialect DialectAdapter, opts ...Opt) *Migration {
 	m := &Migration{
 		db:      db,
-		sign:    normalizedSha256,
+		sign:    normalizedSha1,
 		filter:  func(_ int) bool { return true },
 		dialect: SQLiteDialect{},
 	}
@@ -247,9 +250,12 @@ func scanSchema(row *sql.Row) (Schema, error) {
 	return ver, nil
 }
 
-func normalizedSha256(query string) string {
+func normalizedSha1(query string) string {
 	normalized := normalize(query)
-	hash := sha256.Sum256([]byte(normalized))
+	//nolint:gosec
+	// SHA-1 is used here for change detection,
+	// not for cryptographic security.
+	hash := sha1.Sum([]byte(normalized))
 
 	return hex.EncodeToString(hash[:])
 }
