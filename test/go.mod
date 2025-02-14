@@ -3,7 +3,7 @@ module github.com/ladzaretti/migrate/test
 go 1.23.4
 
 require (
-	github.com/ladzaretti/migrate v0.0.0-20250213211601-f14e3d80232c
+	github.com/ladzaretti/migrate v0.0.0-20250213214100-6c0f0247338d
 	modernc.org/sqlite v1.35.0
 )
 
