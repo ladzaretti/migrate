@@ -7,6 +7,8 @@ github.com/ladzaretti/migrate v0.0.0-20250213211601-f14e3d80232c h1:EWbOXJqvgilE
 github.com/ladzaretti/migrate v0.0.0-20250213211601-f14e3d80232c/go.mod h1:ZldrDg5aw1hlKWjzTUWrRrqIv03ocGvsgipuaCguxi8=
 github.com/ladzaretti/migrate v0.0.0-20250213214100-6c0f0247338d h1:kIw3wAg0iWfMx7AyPsyqLLSXqBwG5+vi1c14uTz4gwU=
 github.com/ladzaretti/migrate v0.0.0-20250213214100-6c0f0247338d/go.mod h1:ZldrDg5aw1hlKWjzTUWrRrqIv03ocGvsgipuaCguxi8=
+github.com/ladzaretti/migrate v0.0.0-20250214013806-838239422e4b h1:qO2gGGjNNysFbO44PmAK27AzeYHT01233UosfxVIlyo=
+github.com/ladzaretti/migrate v0.0.0-20250214013806-838239422e4b/go.mod h1:ZldrDg5aw1hlKWjzTUWrRrqIv03ocGvsgipuaCguxi8=
 github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/ncruces/go-strftime v0.1.9 h1:bY0MQC28UADQmHmaF5dgpLmImcShSi2kHU9XLdhx/f4=
