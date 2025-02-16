@@ -28,9 +28,7 @@ package migrate
 
 import (
 	"context"
-	//nolint:gosec
-	// SHA-1 is used here for change detection,
-	// not for cryptographic security.
+	//nolint:gosec // in this context, SHA-1 is for change detection, not security.
 	"crypto/sha1"
 	"database/sql"
 	"encoding/hex"
@@ -102,22 +100,8 @@ func WithFilter(fn Filter) Opt {
 	}
 }
 
-type ApplyError struct {
-	Index int
-	Err   error
-}
-
-func (e *ApplyError) Error() string {
-	return fmt.Sprintf("failed to apply migration %d: %v", e.Index, e.Err)
-}
-
-func (e *ApplyError) Unwrap() error {
-	return e.Err
-}
-
 func errf(format string, a ...any) error {
-	//nolint:err113 // all package errors essentially mean migration failure.
-	return fmt.Errorf("migration error: "+format, a...)
+	return fmt.Errorf(format, a...)
 }
 
 func (m *Migration) Apply(migrations []string) error {
@@ -126,12 +110,12 @@ func (m *Migration) Apply(migrations []string) error {
 
 func (m *Migration) ApplyContext(ctx context.Context, migrations []string) error {
 	if err := createSchemaVersionTable(ctx, m.db, m.dialect); err != nil {
-		return errf("create schema version table error: %v", err)
+		return errf("create schema version table: %v", err)
 	}
 
 	schema, err := currentSchemaVersion(ctx, m.db, m.dialect)
 	if err != nil {
-		return errf("load version error: %v", err)
+		return errf("current schema version: %v", err)
 	}
 
 	if schema.Version > len(migrations) {
@@ -140,7 +124,7 @@ func (m *Migration) ApplyContext(ctx context.Context, migrations []string) error
 
 	hashHistory := m.hashHistory(migrations)
 	if schema.Version > 0 && schema.Hash != hashHistory[schema.Version] {
-		return errf("schema integrity check failed: expected hash %q, got %q", hashHistory[schema.Version], schema.Hash)
+		return errf("schema integrity check: expected hash %q, got %q", hashHistory[schema.Version], schema.Hash)
 	}
 
 	if schema.Version == len(migrations) {
@@ -149,7 +133,7 @@ func (m *Migration) ApplyContext(ctx context.Context, migrations []string) error
 
 	if m.disableTx {
 		if err := m.applyMigrations(ctx, m.db, schema.Version, migrations, hashHistory); err != nil {
-			return errf("non-transactional migration failed: %w", err)
+			return errf("non-transactional migration: %w", err)
 		}
 
 		return nil
@@ -157,19 +141,19 @@ func (m *Migration) ApplyContext(ctx context.Context, migrations []string) error
 
 	tx, err := m.db.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
-		return errf("start transaction error: %v", err)
+		return errf("start transaction: %v", err)
 	}
 
 	if err := m.applyMigrations(ctx, tx, schema.Version, migrations, hashHistory); err != nil {
 		if err2 := tx.Rollback(); err2 != nil {
-			return errf("rollback failed: %v", errors.Join(err2, err))
+			return errf("rollback: %v", errors.Join(err2, err))
 		}
 
 		return err
 	}
 
 	if err := tx.Commit(); err != nil {
-		return errf("transaction commit error: %v", err)
+		return errf("transaction commit: %v", err)
 	}
 
 	return nil
@@ -183,7 +167,7 @@ func (m *Migration) applyMigrations(ctx context.Context, db LimitedDB, current i
 
 		sch := Schema{Version: i + 1, Hash: hashes[i+1]}
 		if err := applyMigration(ctx, db, m.dialect, sch, migrations[i]); err != nil {
-			return &ApplyError{Index: i, Err: err}
+			return errf("apply migration script %d: %v", i+1, err)
 		}
 	}
 
@@ -193,7 +177,7 @@ func (m *Migration) applyMigrations(ctx context.Context, db LimitedDB, current i
 func (m *Migration) hashHistory(migrations []string) []string {
 	history := make([]string, len(migrations)+1)
 
-	history[0] = "" // Version 0 has no migrations applied
+	history[0] = "" // version 0 has no migrations applied
 
 	for i := 1; i <= len(migrations); i++ {
 		history[i] = m.sign(history[i-1] + m.sign(migrations[i-1]))
@@ -230,7 +214,8 @@ func currentSchemaVersion(ctx context.Context, db LimitedDB, dialect DialectAdap
 
 func execContext(ctx context.Context, db LimitedDB, query string, args ...any) error {
 	if _, err := db.ExecContext(ctx, query, args...); err != nil {
-		return fmt.Errorf("exec context failed: %w", err)
+		//nolint:errorlint // errors are not intended to be matched by the user
+		return fmt.Errorf("exec context: %v", err)
 	}
 
 	return nil
@@ -244,7 +229,7 @@ func scanSchema(row *sql.Row) (Schema, error) {
 			return ver, nil
 		}
 
-		return Schema{}, fmt.Errorf("failed to scan schema version: %w", err)
+		return Schema{}, fmt.Errorf("scan schema version: %w", err)
 	}
 
 	return ver, nil
@@ -252,9 +237,7 @@ func scanSchema(row *sql.Row) (Schema, error) {
 
 func normalizedSha1(query string) string {
 	normalized := normalize(query)
-	//nolint:gosec
-	// SHA-1 is used here for change detection,
-	// not for cryptographic security.
+	//nolint:gosec // in this context, SHA-1 is for change detection, not security.
 	hash := sha1.Sum([]byte(normalized))
 
 	return hex.EncodeToString(hash[:])
