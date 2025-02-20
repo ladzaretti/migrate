@@ -159,6 +159,10 @@ func (m *Migration) ApplyContext(ctx context.Context, migrations []string) error
 	return nil
 }
 
+func (m *Migration) CurrentSchemaVersion() (Schema, error) {
+	return currentSchemaVersion(context.Background(), m.db, m.dialect)
+}
+
 func (m *Migration) applyMigrations(ctx context.Context, db LimitedDB, current int, migrations []string, hashes []string) error {
 	for i := current; i < len(migrations); i++ {
 		if !m.filter(i) {
@@ -176,7 +180,6 @@ func (m *Migration) applyMigrations(ctx context.Context, db LimitedDB, current i
 
 func (m *Migration) hashHistory(migrations []string) []string {
 	history := make([]string, len(migrations)+1)
-
 	history[0] = "" // version 0 has no migrations applied
 
 	for i := 1; i <= len(migrations); i++ {

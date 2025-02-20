@@ -11,6 +11,28 @@ import (
 	"github.com/ladzaretti/migrate"
 )
 
+var (
+	migration01 = `
+	CREATE TABLE
+		IF NOT EXISTS testing_migration_1 (
+			id INTEGER PRIMARY KEY,
+			another_id INTEGER,
+			something_else TEXT
+		);
+	    `
+
+	migration02 = `
+	CREATE TABLE
+		IF NOT EXISTS testing_migration_2 (
+			id INTEGER PRIMARY KEY,
+			another_id INTEGER,
+			something_else TEXT
+		);
+		`
+)
+
+// createSQLiteDB is a testing helper that creates an in-memory sqlite
+// database connection.
 func createSQLiteDB(t *testing.T) *sql.DB {
 	t.Helper()
 
@@ -24,30 +46,64 @@ func createSQLiteDB(t *testing.T) *sql.DB {
 	return db
 }
 
-var migrations = []string{
-	`
-CREATE TABLE
-	IF NOT EXISTS testing_migration (
-		aid INTEGER PRIMARY KEY,
-		another_id INTEGER,
-		something_else TEXT
-	);
-    `,
-	`
-CREATE TABLE
-	IF NOT EXISTS testing_migration_2 (
-		id INTEGER PRIMARY KEY,
-		another_id INTEGER,
-		something_else TEXT
-	);
-	`,
+func TestMigrate_Apply_validMigration(t *testing.T) {
+	db := createSQLiteDB(t)
+	m := migrate.New(db, migrate.SQLiteDialect{})
+
+	if err := m.Apply([]string{migration01}); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
 }
 
-func TestMigrate_Apply(t *testing.T) {
+func TestMigrate_Apply_multiStageMigration(t *testing.T) {
 	db := createSQLiteDB(t)
-
 	m := migrate.New(db, migrate.SQLiteDialect{})
-	if err := m.Apply(migrations); err != nil {
-		t.Fatalf("Failed to migrate database: %v", err)
+
+	if err := m.Apply([]string{migration01}); err != nil {
+		t.Errorf("unexpected error: %v", err)
 	}
+
+	if got, want := currentSchemaVersion(m), 1; got != want {
+		t.Errorf("expected schema version %d, got %d", got, want)
+	}
+
+	if err := m.Apply([]string{migration01, migration02}); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if got, want := currentSchemaVersion(m), 2; got != want {
+		t.Errorf("Length of post = %v, want %v", got, want)
+	}
+}
+
+func TestMigrate_Apply_RollsBackOnError(t *testing.T) {
+	db := createSQLiteDB(t)
+	m := migrate.New(db, migrate.SQLiteDialect{})
+
+	if err := m.Apply([]string{migration01}); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if got, want := currentSchemaVersion(m), 1; got != want {
+		t.Errorf("expected schema version %d, got %d", got, want)
+	}
+
+	err := m.Apply([]string{migration01, migration02, "invalid migration script"})
+
+	if err == nil {
+		t.Errorf("expected an error but got none")
+	}
+
+	if got, want := currentSchemaVersion(m), 1; got != want {
+		t.Errorf("Length of post = %v, want %v", got, want)
+	}
+}
+
+func currentSchemaVersion(m *migrate.Migration) int {
+	currentVersion, err := m.CurrentSchemaVersion()
+	if err != nil {
+		return -1
+	}
+
+	return currentVersion.Version
 }
