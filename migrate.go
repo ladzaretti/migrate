@@ -50,6 +50,16 @@ type LimitedDB interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
+type Source interface {
+	List() ([]string, error)
+}
+
+type StringMigrations []string
+
+func (s StringMigrations) List() ([]string, error) {
+	return s, nil
+}
+
 type Schema struct {
 	Version  int
 	Checksum string
@@ -111,11 +121,16 @@ func errf(format string, a ...any) error {
 	return fmt.Errorf(format, a...)
 }
 
-func (m *Migration) Apply(migrations []string) error {
-	return m.ApplyContext(context.Background(), migrations)
+func (m *Migration) Apply(from Source) error {
+	return m.ApplyContext(context.Background(), from)
 }
 
-func (m *Migration) ApplyContext(ctx context.Context, migrations []string) error {
+func (m *Migration) ApplyContext(ctx context.Context, from Source) error {
+	migrations, err := from.List()
+	if err != nil {
+		return errf("list migrations source: %v", err)
+	}
+
 	if err := createSchemaVersionTable(ctx, m.db, m.dialect); err != nil {
 		return errf("create schema version table: %v", err)
 	}
