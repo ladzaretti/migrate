@@ -55,7 +55,7 @@ func TestMigrate_Apply_validMigration(t *testing.T) {
 	}
 }
 
-func TestMigrate_Apply_multiStageMigration(t *testing.T) {
+func TestMigrate_Apply_multipleMigrations(t *testing.T) {
 	db := createSQLiteDB(t)
 	m := migrate.New(db, migrate.SQLiteDialect{})
 
@@ -76,7 +76,7 @@ func TestMigrate_Apply_multiStageMigration(t *testing.T) {
 	}
 }
 
-func TestMigrate_Apply_RollsBackOnError(t *testing.T) {
+func TestMigrate_Apply_rollsBackOnSQLError(t *testing.T) {
 	db := createSQLiteDB(t)
 	m := migrate.New(db, migrate.SQLiteDialect{})
 
@@ -92,6 +92,110 @@ func TestMigrate_Apply_RollsBackOnError(t *testing.T) {
 
 	if err == nil {
 		t.Errorf("expected an error but got none")
+	}
+
+	gotErr, wantErr := err.Error(), `apply migration script 3: exec context: SQL logic error: near "invalid": syntax error (1)`
+	if gotErr != wantErr {
+		t.Errorf("error %q, want %q", gotErr, wantErr)
+	}
+
+	if got, want := currentSchemaVersion(m), 1; got != want {
+		t.Errorf("current version = %v, want %v", got, want)
+	}
+}
+
+func TestMigrate_Apply_rollsBackOnValidationError(t *testing.T) {
+	db := createSQLiteDB(t)
+	m := migrate.New(db, migrate.SQLiteDialect{})
+
+	if err := m.Apply([]string{migration01, migration02}); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if got, want := currentSchemaVersion(m), 2; got != want {
+		t.Errorf("expected schema version %d, got %d", got, want)
+	}
+
+	// run the same migration again
+	if err := m.Apply([]string{migration01, migration02}); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if got, want := currentSchemaVersion(m), 2; got != want {
+		t.Errorf("expected schema version %d, got %d", got, want)
+	}
+
+	// run corrupted migration
+	corruptedMigration02 := migration02 + "this string wasn't here before"
+	err := m.Apply([]string{migration01, corruptedMigration02})
+
+	if err == nil {
+		t.Errorf("expected an error but got none")
+	}
+
+	gotErr, wantErr := err.Error(), `schema integrity check failed: runtime checksum "77671fcde23b60aff173d65f98bc3863ce38dc83" != database checksum "8165caac3ad7938e2c5aed4f14355fb084b83ef1"`
+	if gotErr != wantErr {
+		t.Errorf("error %q, want %q", gotErr, wantErr)
+	}
+
+	if got, want := currentSchemaVersion(m), 2; got != want {
+		t.Errorf("current version = %v, want %v", got, want)
+	}
+}
+
+func TestMigrate_Apply_withNoChecksumValidation(t *testing.T) {
+	db := createSQLiteDB(t)
+	opts := []migrate.Opt{
+		migrate.WithChecksumValidation(false),
+	}
+	m := migrate.New(db, migrate.SQLiteDialect{}, opts...)
+
+	if err := m.Apply([]string{migration01, migration02}); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if got, want := currentSchemaVersion(m), 2; got != want {
+		t.Errorf("expected schema version %d, got %d", got, want)
+	}
+
+	// run the same migration again
+	if err := m.Apply([]string{migration01, migration02}); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if got, want := currentSchemaVersion(m), 2; got != want {
+		t.Errorf("expected schema version %d, got %d", got, want)
+	}
+
+	modifiedMigration02 := migration02 + "this string wasn't here before"
+	if err := m.Apply([]string{migration01, modifiedMigration02}); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if got, want := currentSchemaVersion(m), 2; got != want {
+		t.Errorf("current version = %v, want %v", got, want)
+	}
+}
+
+func TestMigrate_Apply_withFilter(t *testing.T) {
+	db := createSQLiteDB(t)
+	opts := []migrate.Opt{
+		migrate.WithFilter(func(migrationNumber int) bool {
+			return migrationNumber != 2
+		}),
+	}
+	m := migrate.New(db, migrate.SQLiteDialect{}, opts...)
+
+	if err := m.Apply([]string{migration01}); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if got, want := currentSchemaVersion(m), 1; got != want {
+		t.Errorf("expected schema version %d, got %d", got, want)
+	}
+
+	if err := m.Apply([]string{migration01, migration02}); err != nil {
+		t.Errorf("unexpected error: %v", err)
 	}
 
 	if got, want := currentSchemaVersion(m), 1; got != want {
