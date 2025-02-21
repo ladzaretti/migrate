@@ -38,11 +38,9 @@ import (
 	"unicode"
 )
 
-// Signer generates a typically unique identifier for a given input string,
-// used to sign migrations.
-//
-// It is used for schema comparison and validation.
-type Signer func(s string) string
+// Checksum is a function type that generates a unique checksum for the input string.
+// It is used for schema validation and comparison in migrations.
+type Checksum func(s string) string
 
 type Filter func(migrationNumber int) bool
 
@@ -60,10 +58,10 @@ type Schema struct {
 type Migration struct {
 	db                     *sql.DB
 	dialect                DialectAdapter
-	sign                   Signer
 	migrationFilter        Filter
-	withTx                 bool
+	checksum               Checksum
 	withChecksumValidation bool
+	withTx                 bool
 }
 
 type Opt func(*Migration)
@@ -72,10 +70,10 @@ func New(db *sql.DB, dialect DialectAdapter, opts ...Opt) *Migration {
 	m := &Migration{
 		db:                     db,
 		dialect:                SQLiteDialect{},
-		sign:                   normalizedSha1,
 		migrationFilter:        func(_ int) bool { return true },
-		withTx:                 true,
+		checksum:               normalizedSha1,
 		withChecksumValidation: true,
+		withTx:                 true,
 	}
 
 	for _, opt := range opts {
@@ -85,9 +83,9 @@ func New(db *sql.DB, dialect DialectAdapter, opts ...Opt) *Migration {
 	return m
 }
 
-func WithCustomSigning(fn Signer) Opt {
+func WithChecksum(fn Checksum) Opt {
 	return func(m *Migration) {
-		m.sign = fn
+		m.checksum = fn
 	}
 }
 
@@ -191,8 +189,8 @@ func (m *Migration) checksumHistory(migrations []string) []string {
 	history := make([]string, len(migrations)+1)
 	history[0] = "" // version 0 has no migrations applied
 
-	for i := 1; i <= len(migrations); i++ {
-		history[i] = m.sign(history[i-1] + m.sign(migrations[i-1]))
+	for i, mig := range migrations {
+		history[i+1] = m.checksum(history[i] + m.checksum(mig))
 	}
 
 	return history
