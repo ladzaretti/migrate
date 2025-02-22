@@ -1,5 +1,6 @@
 .DEFAULT_GOAL = check
 
+# renovate: source=github-releases name=golangci/golangci-lint
 GOLANGCI_VERSION ?= v1.63.4
 TEST_ARGS=-timeout 5s -coverpkg=github.com/ladzaretti/migrate
 
@@ -19,12 +20,12 @@ clean:
 
 .PHONY: test
 test:
-	go test $(TEST_ARGS) ./test/
+	go test $(TEST_ARGS) ./migrate_test/
 
 .PHONY: cover
 cover:
 	@mkdir -p coverage
-	go test $(TEST_ARGS) ./test/ -coverprofile coverage/cover.out
+	go test $(TEST_ARGS) ./migrate_test/ -coverprofile coverage/cover.out
 
 .PHONY: coverage-html
 coverage-html: cover

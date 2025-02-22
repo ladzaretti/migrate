@@ -2,5 +2,5 @@ go 1.23.4
 
 use (
 	./
-	./test
+	./migrate_test
 )

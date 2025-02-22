@@ -1,10 +1,14 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", ":gomod"],
+  "extends": [
+    "config:recommended",
+    "customManagers:makefileVersions",
+    ":gomod"
+  ],
   "dependencyDashboard": true,
   "packageRules": [
     {
-      "matchFileNames": ["test/**"],
+      "matchFileNames": ["migrate_test/**"],
       "automerge": true
     },
     {

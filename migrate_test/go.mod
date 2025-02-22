@@ -1,4 +1,4 @@
-module github.com/ladzaretti/migrate/test
+module github.com/ladzaretti/migrate/migrate_test
 
 go 1.23.4
 
