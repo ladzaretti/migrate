@@ -55,7 +55,7 @@ type Schema struct {
 	Checksum string
 }
 
-type Migration struct {
+type Migrator struct {
 	db                     *sql.DB
 	dialect                DialectAdapter
 	migrationFilter        Filter
@@ -64,10 +64,10 @@ type Migration struct {
 	withTx                 bool
 }
 
-type Opt func(*Migration)
+type Opt func(*Migrator)
 
-func New(db *sql.DB, dialect DialectAdapter, opts ...Opt) *Migration {
-	m := &Migration{
+func New(db *sql.DB, dialect DialectAdapter, opts ...Opt) *Migrator {
+	m := &Migrator{
 		db:                     db,
 		dialect:                SQLiteDialect{},
 		migrationFilter:        func(_ int) bool { return true },
@@ -84,25 +84,25 @@ func New(db *sql.DB, dialect DialectAdapter, opts ...Opt) *Migration {
 }
 
 func WithChecksum(fn Checksum) Opt {
-	return func(m *Migration) {
+	return func(m *Migrator) {
 		m.checksum = fn
 	}
 }
 
-func WithTransactions(enabled bool) Opt {
-	return func(m *Migration) {
+func WithTransaction(enabled bool) Opt {
+	return func(m *Migrator) {
 		m.withTx = enabled
 	}
 }
 
 func WithChecksumValidation(enabled bool) Opt {
-	return func(m *Migration) {
+	return func(m *Migrator) {
 		m.withChecksumValidation = enabled
 	}
 }
 
 func WithFilter(fn Filter) Opt {
-	return func(m *Migration) {
+	return func(m *Migrator) {
 		m.migrationFilter = fn
 	}
 }
@@ -111,11 +111,11 @@ func errf(format string, a ...any) error {
 	return fmt.Errorf(format, a...)
 }
 
-func (m *Migration) Apply(from Source) error {
+func (m *Migrator) Apply(from Source) error {
 	return m.ApplyContext(context.Background(), from)
 }
 
-func (m *Migration) ApplyContext(ctx context.Context, from Source) error {
+func (m *Migrator) ApplyContext(ctx context.Context, from Source) error {
 	migrations, err := from.List()
 	if err != nil {
 		return errf("list migrations source: %v", err)
@@ -171,11 +171,11 @@ func (m *Migration) ApplyContext(ctx context.Context, from Source) error {
 	return nil
 }
 
-func (m *Migration) CurrentSchemaVersion() (Schema, error) {
+func (m *Migrator) CurrentSchemaVersion() (Schema, error) {
 	return currentSchemaVersion(context.Background(), m.db, m.dialect)
 }
 
-func (m *Migration) applyMigrations(ctx context.Context, db LimitedDB, current int, migrations []string, checksums []string) error {
+func (m *Migrator) applyMigrations(ctx context.Context, db LimitedDB, current int, migrations []string, checksums []string) error {
 	for i := current; i < len(migrations); i++ {
 		if !m.migrationFilter(i + 1) {
 			continue
@@ -190,7 +190,7 @@ func (m *Migration) applyMigrations(ctx context.Context, db LimitedDB, current i
 	return nil
 }
 
-func (m *Migration) checksumHistory(migrations []string) []string {
+func (m *Migrator) checksumHistory(migrations []string) []string {
 	history := make([]string, len(migrations)+1)
 	history[0] = "" // version 0 has no migrations applied
 
@@ -201,7 +201,7 @@ func (m *Migration) checksumHistory(migrations []string) []string {
 	return history
 }
 
-func (m *Migration) validateChecksum(dbSchema Schema, runtimeChecksum []string) error {
+func (m *Migrator) validateChecksum(dbSchema Schema, runtimeChecksum []string) error {
 	if !m.withChecksumValidation {
 		return nil
 	}

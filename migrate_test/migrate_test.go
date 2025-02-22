@@ -48,16 +48,7 @@ func createSQLiteDB(t *testing.T) *sql.DB {
 	return db
 }
 
-func TestMigrate_Apply_validMigration(t *testing.T) {
-	db := createSQLiteDB(t)
-	m := migrate.New(db, migrate.SQLiteDialect{})
-
-	if err := m.Apply(fromStringSource(migration01)); err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
-func TestMigrate_Apply_multipleMigrations(t *testing.T) {
+func TestMigrate_Apply_stringMigrations(t *testing.T) {
 	db := createSQLiteDB(t)
 	m := migrate.New(db, migrate.SQLiteDialect{})
 
@@ -106,6 +97,29 @@ func TestMigrate_Apply_embeddedMigrations(t *testing.T) {
 
 	if got, want := currentSchemaVersion(m), 2; got != want {
 		t.Errorf("expected schema version = %v, want %v", got, want)
+	}
+}
+
+func TestMigrate_Apply_withTxDisabled(t *testing.T) {
+	db := createSQLiteDB(t)
+
+	opts := []migrate.Opt{
+		migrate.WithTransaction(false),
+	}
+	m := migrate.New(db, migrate.SQLiteDialect{}, opts...)
+
+	if got, want := currentSchemaVersion(m), -1; got != want {
+		t.Errorf("expected schema version %d, got %d", got, want)
+	}
+
+	source := fromEmbeddedSource(embeddedMigrations, "migrations")
+
+	if err := m.Apply(source); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if got, want := currentSchemaVersion(m), 2; got != want {
+		t.Errorf("expected schema version %d, got %d", got, want)
 	}
 }
 
@@ -260,7 +274,7 @@ func fromStringSource(s ...string) migrate.StringMigrations {
 	return migrate.StringMigrations(s)
 }
 
-func currentSchemaVersion(m *migrate.Migration) int {
+func currentSchemaVersion(m *migrate.Migrator) int {
 	currentVersion, err := m.CurrentSchemaVersion()
 	if err != nil {
 		return -1
