@@ -1,6 +1,6 @@
 module github.com/ladzaretti/migrate/test
 
-go 1.23
+go 1.23.4
 
 require (
 	github.com/ladzaretti/migrate v0.0.0-20250214054958-46254fceae9e
