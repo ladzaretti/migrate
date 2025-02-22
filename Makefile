@@ -1,6 +1,6 @@
 .DEFAULT_GOAL = check
 
-# renovate: source=github-releases name=golangci/golangci-lint
+# renovate: datasource=github-releases depName=golangci/golangci-lint
 GOLANGCI_VERSION ?= v1.63.4
 TEST_ARGS=-timeout 5s -coverpkg=github.com/ladzaretti/migrate
 
