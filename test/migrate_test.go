@@ -2,12 +2,16 @@ package test
 
 import (
 	"database/sql"
+	"embed"
 	"testing"
 
 	_ "modernc.org/sqlite"
 
 	"github.com/ladzaretti/migrate"
 )
+
+//go:embed migrations
+var embeddedMigrations embed.FS
 
 var (
 	migration01 = `
@@ -48,7 +52,7 @@ func TestMigrate_Apply_validMigration(t *testing.T) {
 	db := createSQLiteDB(t)
 	m := migrate.New(db, migrate.SQLiteDialect{})
 
-	if err := m.Apply(fromSource(migration01)); err != nil {
+	if err := m.Apply(fromStringSource(migration01)); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -57,7 +61,11 @@ func TestMigrate_Apply_multipleMigrations(t *testing.T) {
 	db := createSQLiteDB(t)
 	m := migrate.New(db, migrate.SQLiteDialect{})
 
-	if err := m.Apply(fromSource(migration01)); err != nil {
+	if got, want := currentSchemaVersion(m), -1; got != want {
+		t.Errorf("expected schema version %d, got %d", got, want)
+	}
+
+	if err := m.Apply(fromStringSource(migration01)); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -65,12 +73,39 @@ func TestMigrate_Apply_multipleMigrations(t *testing.T) {
 		t.Errorf("expected schema version %d, got %d", got, want)
 	}
 
-	if err := m.Apply(fromSource(migration01, migration02)); err != nil {
+	if err := m.Apply(fromStringSource(migration01, migration02)); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
 	if got, want := currentSchemaVersion(m), 2; got != want {
-		t.Errorf("Length of post = %v, want %v", got, want)
+		t.Errorf("expected schema version = %v, want %v", got, want)
+	}
+}
+
+func TestMigrate_Apply_embeddedMigrations(t *testing.T) {
+	db := createSQLiteDB(t)
+	m := migrate.New(db, migrate.SQLiteDialect{})
+
+	if got, want := currentSchemaVersion(m), -1; got != want {
+		t.Errorf("expected schema version %d, got %d", got, want)
+	}
+
+	source := fromEmbeddedSource(embeddedMigrations, "migrations")
+
+	if err := m.Apply(source); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if got, want := currentSchemaVersion(m), 2; got != want {
+		t.Errorf("expected schema version %d, got %d", got, want)
+	}
+
+	if err := m.Apply(source); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if got, want := currentSchemaVersion(m), 2; got != want {
+		t.Errorf("expected schema version = %v, want %v", got, want)
 	}
 }
 
@@ -78,7 +113,11 @@ func TestMigrate_Apply_rollsBackOnSQLError(t *testing.T) {
 	db := createSQLiteDB(t)
 	m := migrate.New(db, migrate.SQLiteDialect{})
 
-	if err := m.Apply(fromSource(migration01)); err != nil {
+	if got, want := currentSchemaVersion(m), -1; got != want {
+		t.Errorf("expected schema version %d, got %d", got, want)
+	}
+
+	if err := m.Apply(fromStringSource(migration01)); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -86,7 +125,7 @@ func TestMigrate_Apply_rollsBackOnSQLError(t *testing.T) {
 		t.Errorf("expected schema version %d, got %d", got, want)
 	}
 
-	err := m.Apply(fromSource(migration01, migration02, "invalid migration script"))
+	err := m.Apply(fromStringSource(migration01, migration02, "invalid migration script"))
 
 	if err == nil {
 		t.Errorf("expected an error but got none")
@@ -106,7 +145,11 @@ func TestMigrate_Apply_rollsBackOnValidationError(t *testing.T) {
 	db := createSQLiteDB(t)
 	m := migrate.New(db, migrate.SQLiteDialect{})
 
-	if err := m.Apply(fromSource(migration01, migration02)); err != nil {
+	if got, want := currentSchemaVersion(m), -1; got != want {
+		t.Errorf("expected schema version %d, got %d", got, want)
+	}
+
+	if err := m.Apply(fromStringSource(migration01, migration02)); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -115,7 +158,7 @@ func TestMigrate_Apply_rollsBackOnValidationError(t *testing.T) {
 	}
 
 	// run the same migration again
-	if err := m.Apply(fromSource(migration01, migration02)); err != nil {
+	if err := m.Apply(fromStringSource(migration01, migration02)); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -125,7 +168,7 @@ func TestMigrate_Apply_rollsBackOnValidationError(t *testing.T) {
 
 	// run corrupted migration
 	corruptedMigration02 := migration02 + "this string wasn't here before"
-	err := m.Apply(fromSource(migration01, corruptedMigration02))
+	err := m.Apply(fromStringSource(migration01, corruptedMigration02))
 
 	if err == nil {
 		t.Errorf("expected an error but got none")
@@ -148,7 +191,11 @@ func TestMigrate_Apply_withNoChecksumValidation(t *testing.T) {
 	}
 	m := migrate.New(db, migrate.SQLiteDialect{}, opts...)
 
-	if err := m.Apply(fromSource(migration01, migration02)); err != nil {
+	if got, want := currentSchemaVersion(m), -1; got != want {
+		t.Errorf("expected schema version %d, got %d", got, want)
+	}
+
+	if err := m.Apply(fromStringSource(migration01, migration02)); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -157,7 +204,7 @@ func TestMigrate_Apply_withNoChecksumValidation(t *testing.T) {
 	}
 
 	// run the same migration again
-	if err := m.Apply(fromSource(migration01, migration02)); err != nil {
+	if err := m.Apply(fromStringSource(migration01, migration02)); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -166,7 +213,7 @@ func TestMigrate_Apply_withNoChecksumValidation(t *testing.T) {
 	}
 
 	modifiedMigration02 := migration02 + "this string wasn't here before"
-	if err := m.Apply(fromSource(migration01, modifiedMigration02)); err != nil {
+	if err := m.Apply(fromStringSource(migration01, modifiedMigration02)); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -184,7 +231,11 @@ func TestMigrate_Apply_withFilter(t *testing.T) {
 	}
 	m := migrate.New(db, migrate.SQLiteDialect{}, opts...)
 
-	if err := m.Apply(fromSource(migration01)); err != nil {
+	if got, want := currentSchemaVersion(m), -1; got != want {
+		t.Errorf("expected schema version %d, got %d", got, want)
+	}
+
+	if err := m.Apply(fromStringSource(migration01)); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -192,16 +243,20 @@ func TestMigrate_Apply_withFilter(t *testing.T) {
 		t.Errorf("expected schema version %d, got %d", got, want)
 	}
 
-	if err := m.Apply(fromSource(migration01, migration02)); err != nil {
+	if err := m.Apply(fromStringSource(migration01, migration02)); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
 	if got, want := currentSchemaVersion(m), 1; got != want {
-		t.Errorf("Length of post = %v, want %v", got, want)
+		t.Errorf("expected schema version = %v, want %v", got, want)
 	}
 }
 
-func fromSource(s ...string) migrate.StringMigrations {
+func fromEmbeddedSource(fs embed.FS, p string) migrate.EmbeddedMigrations {
+	return migrate.EmbeddedMigrations{FS: fs, Path: p}
+}
+
+func fromStringSource(s ...string) migrate.StringMigrations {
 	return migrate.StringMigrations(s)
 }
 

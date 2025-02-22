@@ -50,16 +50,6 @@ type LimitedDB interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-type Source interface {
-	List() ([]string, error)
-}
-
-type StringMigrations []string
-
-func (s StringMigrations) List() ([]string, error) {
-	return s, nil
-}
-
 type Schema struct {
 	Version  int
 	Checksum string
