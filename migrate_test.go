@@ -10,8 +10,15 @@ import (
 	"github.com/ladzaretti/migrate"
 )
 
-//go:embed migrations
-var embeddedMigrations embed.FS
+var (
+	//go:embed test/migrations
+	embedFS embed.FS
+
+	embeddedMigrations = migrate.EmbeddedMigrations{
+		FS:   embedFS,
+		Path: "test/migrations",
+	}
+)
 
 var (
 	migration01 = `
@@ -81,9 +88,7 @@ func TestMigrate_Apply_embeddedMigrations(t *testing.T) {
 		t.Errorf("expected schema version %d, got %d", got, want)
 	}
 
-	source := fromEmbeddedSource(embeddedMigrations, "migrations")
-
-	if err := m.Apply(source); err != nil {
+	if err := m.Apply(embeddedMigrations); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -91,7 +96,7 @@ func TestMigrate_Apply_embeddedMigrations(t *testing.T) {
 		t.Errorf("expected schema version %d, got %d", got, want)
 	}
 
-	if err := m.Apply(source); err != nil {
+	if err := m.Apply(embeddedMigrations); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -112,9 +117,7 @@ func TestMigrate_Apply_withTxDisabled(t *testing.T) {
 		t.Errorf("expected schema version %d, got %d", got, want)
 	}
 
-	source := fromEmbeddedSource(embeddedMigrations, "migrations")
-
-	if err := m.Apply(source); err != nil {
+	if err := m.Apply(embeddedMigrations); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -264,10 +267,6 @@ func TestMigrate_Apply_withFilter(t *testing.T) {
 	if got, want := currentSchemaVersion(m), 1; got != want {
 		t.Errorf("expected schema version = %v, want %v", got, want)
 	}
-}
-
-func fromEmbeddedSource(fs embed.FS, p string) migrate.EmbeddedMigrations {
-	return migrate.EmbeddedMigrations{FS: fs, Path: p}
 }
 
 func fromStringSource(s ...string) migrate.StringMigrations {
