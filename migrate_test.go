@@ -2,7 +2,8 @@ package migrate_test
 
 import (
 	"database/sql"
-	"embed"
+	"errors"
+	"fmt"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -10,139 +11,128 @@ import (
 	"github.com/ladzaretti/migrate"
 )
 
-var (
-	//go:embed test/migrations
-	embedFS embed.FS
-
-	embeddedMigrations = migrate.EmbeddedMigrations{
-		FS:   embedFS,
-		Path: "test/migrations",
-	}
-)
-
-var (
-	migration01 = `
-	CREATE TABLE
-		IF NOT EXISTS testing_migration_1 (
-			id INTEGER PRIMARY KEY,
-			another_id INTEGER,
-			something_else TEXT
-		);
-	    `
-
-	migration02 = `
-	CREATE TABLE
-		IF NOT EXISTS testing_migration_2 (
-			id INTEGER PRIMARY KEY,
-			another_id INTEGER,
-			something_else TEXT
-		);
-		`
-)
-
-// createSQLiteDB is a testing helper that creates an in-memory sqlite
-// database connection.
-func createSQLiteDB(t *testing.T) *sql.DB {
-	t.Helper()
-
-	db, err := sql.Open("sqlite", ":memory:")
-	if err != nil {
-		t.Fatalf("Failed to open database: %v", err)
-	}
-
-	t.Cleanup(func() { db.Close() })
-
-	return db
+type testSuiteConfig struct {
+	dbHelper           func(t *testing.T) *sql.DB
+	dialect            migrate.DialectAdapter
+	embeddedMigrations migrate.EmbeddedMigrations
+	stringMigrations   []string
 }
 
-func TestMigrate_Apply_stringMigrations(t *testing.T) {
-	db := createSQLiteDB(t)
-	m := migrate.New(db, migrate.SQLiteDialect{})
+type testSuite struct {
+	testSuiteConfig
+}
 
-	if got, want := currentSchemaVersion(m), -1; got != want {
-		t.Errorf("expected schema version %d, got %d", got, want)
+// TODO1: pg test
+
+func newTestSuite(c testSuiteConfig) (*testSuite, error) {
+	if len(c.stringMigrations) < 2 {
+		return nil, errors.New("stringMigrations must have at least 2 elements")
 	}
 
-	if err := m.Apply(fromStringSource(migration01)); err != nil {
-		t.Errorf("unexpected error: %v", err)
+	embeddedMigrations, err := c.embeddedMigrations.List()
+	if err != nil {
+		return nil, fmt.Errorf("list embedded migrations: %w", err)
+	}
+
+	if len(embeddedMigrations) < 2 {
+		return nil, errors.New("embeddedMigrations must have at least 2 elements")
+	}
+
+	return &testSuite{testSuiteConfig: c}, nil
+}
+
+func (s *testSuite) applyStringMigrations(t *testing.T) {
+	db := s.dbHelper(t)
+	m := migrate.New(db, s.dialect)
+
+	if got, want := currentSchemaVersion(m), -1; got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
+	}
+
+	if err := m.Apply(fromStringSource(s.stringMigrations[0])); err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
 	if got, want := currentSchemaVersion(m), 1; got != want {
-		t.Errorf("expected schema version %d, got %d", got, want)
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if err := m.Apply(fromStringSource(migration01, migration02)); err != nil {
-		t.Errorf("unexpected error: %v", err)
+	if err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
-	if got, want := currentSchemaVersion(m), 2; got != want {
+	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
 		t.Errorf("expected schema version = %v, want %v", got, want)
 	}
 }
 
-func TestMigrate_Apply_embeddedMigrations(t *testing.T) {
-	db := createSQLiteDB(t)
-	m := migrate.New(db, migrate.SQLiteDialect{})
+func (s *testSuite) applyEmbeddedMigrations(t *testing.T) {
+	db := s.dbHelper(t)
+	m := migrate.New(db, s.dialect)
+
+	migrations, _ := s.embeddedMigrations.List()
 
 	if got, want := currentSchemaVersion(m), -1; got != want {
-		t.Errorf("expected schema version %d, got %d", got, want)
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if err := m.Apply(embeddedMigrations); err != nil {
-		t.Errorf("unexpected error: %v", err)
+	if err := m.Apply(s.embeddedMigrations); err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
-	if got, want := currentSchemaVersion(m), 2; got != want {
-		t.Errorf("expected schema version %d, got %d", got, want)
+	if got, want := currentSchemaVersion(m), len(migrations); got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if err := m.Apply(embeddedMigrations); err != nil {
-		t.Errorf("unexpected error: %v", err)
+	if err := m.Apply(s.embeddedMigrations); err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
-	if got, want := currentSchemaVersion(m), 2; got != want {
+	if got, want := currentSchemaVersion(m), len(migrations); got != want {
 		t.Errorf("expected schema version = %v, want %v", got, want)
 	}
 }
 
-func TestMigrate_Apply_withTxDisabled(t *testing.T) {
-	db := createSQLiteDB(t)
+func (s *testSuite) applyWithTxDisabled(t *testing.T) {
+	db := s.dbHelper(t)
 
 	opts := []migrate.Opt{
 		migrate.WithTransaction(false),
 	}
-	m := migrate.New(db, migrate.SQLiteDialect{}, opts...)
+	m := migrate.New(db, s.dialect, opts...)
 
 	if got, want := currentSchemaVersion(m), -1; got != want {
-		t.Errorf("expected schema version %d, got %d", got, want)
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if err := m.Apply(embeddedMigrations); err != nil {
-		t.Errorf("unexpected error: %v", err)
+	if err := m.Apply(s.embeddedMigrations); err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
-	if got, want := currentSchemaVersion(m), 2; got != want {
-		t.Errorf("expected schema version %d, got %d", got, want)
+	migrations, _ := s.embeddedMigrations.List()
+	if got, want := currentSchemaVersion(m), len(migrations); got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 }
 
-func TestMigrate_Apply_rollsBackOnSQLError(t *testing.T) {
-	db := createSQLiteDB(t)
-	m := migrate.New(db, migrate.SQLiteDialect{})
+func (s *testSuite) rollsBackOnSQLError(t *testing.T) {
+	db := s.dbHelper(t)
+	m := migrate.New(db, s.dialect)
 
 	if got, want := currentSchemaVersion(m), -1; got != want {
-		t.Errorf("expected schema version %d, got %d", got, want)
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if err := m.Apply(fromStringSource(migration01)); err != nil {
-		t.Errorf("unexpected error: %v", err)
+	if err := m.Apply(fromStringSource(s.stringMigrations[0])); err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
 	if got, want := currentSchemaVersion(m), 1; got != want {
-		t.Errorf("expected schema version %d, got %d", got, want)
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	err := m.Apply(fromStringSource(migration01, migration02, "invalid migration script"))
+	migrations := copyAppend(s.stringMigrations, "invalid migration script")
+	err := m.Apply(fromStringSource(migrations...))
 
 	if err == nil {
 		t.Errorf("expected an error but got none")
@@ -150,42 +140,44 @@ func TestMigrate_Apply_rollsBackOnSQLError(t *testing.T) {
 
 	gotErr, wantErr := err.Error(), `apply migration script 3: exec context: SQL logic error: near "invalid": syntax error (1)`
 	if gotErr != wantErr {
-		t.Errorf("error %q, want %q", gotErr, wantErr)
+		t.Errorf("unexpected error: got %q, want %q", gotErr, wantErr)
 	}
 
 	if got, want := currentSchemaVersion(m), 1; got != want {
-		t.Errorf("current version = %v, want %v", got, want)
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 }
 
-func TestMigrate_Apply_rollsBackOnValidationError(t *testing.T) {
-	db := createSQLiteDB(t)
-	m := migrate.New(db, migrate.SQLiteDialect{})
+func (s *testSuite) rollsBackOnValidationError(t *testing.T) {
+	db := s.dbHelper(t)
+	m := migrate.New(db, s.dialect)
 
 	if got, want := currentSchemaVersion(m), -1; got != want {
-		t.Errorf("expected schema version %d, got %d", got, want)
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if err := m.Apply(fromStringSource(migration01, migration02)); err != nil {
-		t.Errorf("unexpected error: %v", err)
+	if err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
-	if got, want := currentSchemaVersion(m), 2; got != want {
-		t.Errorf("expected schema version %d, got %d", got, want)
+	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
 	// run the same migration again
-	if err := m.Apply(fromStringSource(migration01, migration02)); err != nil {
-		t.Errorf("unexpected error: %v", err)
+	if err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
-	if got, want := currentSchemaVersion(m), 2; got != want {
-		t.Errorf("expected schema version %d, got %d", got, want)
+	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
+
+	corrupted := copyAppend(s.stringMigrations)
+	corrupted[len(corrupted)-1] += "this string wasn't here before"
 
 	// run corrupted migration
-	corruptedMigration02 := migration02 + "this string wasn't here before"
-	err := m.Apply(fromStringSource(migration01, corruptedMigration02))
+	err := m.Apply(fromStringSource(corrupted...))
 
 	if err == nil {
 		t.Errorf("expected an error but got none")
@@ -193,79 +185,97 @@ func TestMigrate_Apply_rollsBackOnValidationError(t *testing.T) {
 
 	gotErr, wantErr := err.Error(), `schema integrity check failed: runtime checksum "77671fcde23b60aff173d65f98bc3863ce38dc83" != database checksum "8165caac3ad7938e2c5aed4f14355fb084b83ef1"`
 	if gotErr != wantErr {
-		t.Errorf("error %q, want %q", gotErr, wantErr)
+		t.Errorf("unexpected error: got %q, want %q", gotErr, wantErr)
 	}
 
-	if got, want := currentSchemaVersion(m), 2; got != want {
-		t.Errorf("current version = %v, want %v", got, want)
+	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 }
 
-func TestMigrate_Apply_withNoChecksumValidation(t *testing.T) {
-	db := createSQLiteDB(t)
+func (s *testSuite) applyWithNoChecksumValidation(t *testing.T) {
+	db := s.dbHelper(t)
 	opts := []migrate.Opt{
 		migrate.WithChecksumValidation(false),
 	}
-	m := migrate.New(db, migrate.SQLiteDialect{}, opts...)
+	m := migrate.New(db, s.dialect, opts...)
 
 	if got, want := currentSchemaVersion(m), -1; got != want {
-		t.Errorf("expected schema version %d, got %d", got, want)
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if err := m.Apply(fromStringSource(migration01, migration02)); err != nil {
-		t.Errorf("unexpected error: %v", err)
+	if err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
-	if got, want := currentSchemaVersion(m), 2; got != want {
-		t.Errorf("expected schema version %d, got %d", got, want)
+	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
 	// run the same migration again
-	if err := m.Apply(fromStringSource(migration01, migration02)); err != nil {
-		t.Errorf("unexpected error: %v", err)
+	if err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
-	if got, want := currentSchemaVersion(m), 2; got != want {
-		t.Errorf("expected schema version %d, got %d", got, want)
+	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	modifiedMigration02 := migration02 + "this string wasn't here before"
-	if err := m.Apply(fromStringSource(migration01, modifiedMigration02)); err != nil {
-		t.Errorf("unexpected error: %v", err)
+	corrupted := copyAppend(s.stringMigrations)
+	corrupted[len(corrupted)-1] += "this string wasn't here before"
+
+	if err := m.Apply(fromStringSource(corrupted...)); err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
-	if got, want := currentSchemaVersion(m), 2; got != want {
-		t.Errorf("current version = %v, want %v", got, want)
+	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 }
 
-func TestMigrate_Apply_withFilter(t *testing.T) {
+func (s *testSuite) applyWithFilter(t *testing.T) {
 	db := createSQLiteDB(t)
 	opts := []migrate.Opt{
 		migrate.WithFilter(func(migrationNumber int) bool {
-			return migrationNumber != 2
+			return migrationNumber != 1
 		}),
 	}
 	m := migrate.New(db, migrate.SQLiteDialect{}, opts...)
 
 	if got, want := currentSchemaVersion(m), -1; got != want {
-		t.Errorf("expected schema version %d, got %d", got, want)
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if err := m.Apply(fromStringSource(migration01)); err != nil {
-		t.Errorf("unexpected error: %v", err)
+	if err := m.Apply(fromStringSource(s.stringMigrations[0])); err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
+	}
+
+	if got, want := currentSchemaVersion(m), 0; got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
+	}
+
+	opts = []migrate.Opt{
+		migrate.WithFilter(func(migrationNumber int) bool {
+			return migrationNumber != 2
+		}),
+	}
+
+	m = migrate.New(db, migrate.SQLiteDialect{}, opts...)
+	if err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
 	if got, want := currentSchemaVersion(m), 1; got != want {
-		t.Errorf("expected schema version %d, got %d", got, want)
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if err := m.Apply(fromStringSource(migration01, migration02)); err != nil {
-		t.Errorf("unexpected error: %v", err)
+	m = migrate.New(db, migrate.SQLiteDialect{})
+	if err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
-	if got, want := currentSchemaVersion(m), 1; got != want {
-		t.Errorf("expected schema version = %v, want %v", got, want)
+	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 }
 
@@ -280,4 +290,11 @@ func currentSchemaVersion(m *migrate.Migrator) int {
 	}
 
 	return currentVersion.Version
+}
+
+func copyAppend[T any](s []T, el ...T) []T {
+	cs := make([]T, len(s), len(s)+len(el))
+	copy(cs, s)
+
+	return append(cs, el...)
 }
