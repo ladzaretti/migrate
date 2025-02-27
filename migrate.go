@@ -62,6 +62,7 @@ type Migrator struct {
 	checksum               Checksum
 	withChecksumValidation bool
 	withTx                 bool
+	reapplyAll             bool
 }
 
 type Opt func(*Migrator)
@@ -69,7 +70,7 @@ type Opt func(*Migrator)
 func New(db *sql.DB, dialect DialectAdapter, opts ...Opt) *Migrator {
 	m := &Migrator{
 		db:                     db,
-		dialect:                SQLiteDialect{},
+		dialect:                dialect,
 		migrationFilter:        func(_ int) bool { return true },
 		checksum:               normalizedSha1,
 		withChecksumValidation: true,
@@ -107,87 +108,108 @@ func WithFilter(fn Filter) Opt {
 	}
 }
 
+func WithReapplyAll(enabled bool) Opt {
+	return func(m *Migrator) {
+		m.reapplyAll = enabled
+	}
+}
+
 func errf(format string, a ...any) error {
 	return fmt.Errorf(format, a...)
 }
 
-func (m *Migrator) Apply(from Source) error {
+func (m *Migrator) Apply(from Source) (int, error) {
 	return m.ApplyContext(context.Background(), from)
 }
 
-func (m *Migrator) ApplyContext(ctx context.Context, from Source) error {
+func (m *Migrator) ApplyContext(ctx context.Context, from Source) (int, error) {
 	migrations, err := from.List()
 	if err != nil {
-		return errf("list migrations source: %v", err)
+		return 0, errf("list migrations source: %v", err)
 	}
 
 	if err := createSchemaVersionTable(ctx, m.db, m.dialect); err != nil {
-		return errf("create schema version table: %v", err)
+		return 0, errf("create schema version table: %v", err)
 	}
 
 	schema, err := currentSchemaVersion(ctx, m.db, m.dialect)
 	if err != nil {
-		return errf("current schema version: %v", err)
+		return 0, errf("current schema version: %v", err)
 	}
 
 	if schema.Version > len(migrations) {
-		return errf("database version (%d) exceeds available migrations (%d)", schema.Version, len(migrations))
+		return 0, errf("database version (%d) exceeds available migrations (%d)", schema.Version, len(migrations))
 	}
 
 	runtimeChecksum := m.checksumHistory(migrations)
 	if err := m.validateChecksum(schema, runtimeChecksum); err != nil {
-		return errf("schema integrity check failed: %v", err)
+		return 0, errf("schema integrity check failed: %v", err)
 	}
 
 	if schema.Version == len(migrations) {
-		return nil // already up to date
+		return 0, nil // already up to date
 	}
 
 	if !m.withTx {
-		if err := m.applyMigrations(ctx, m.db, schema.Version, migrations, runtimeChecksum); err != nil {
-			return errf("non-transactional migration: %w", err)
+		n, err := m.applyMigrations(ctx, m.db, schema.Version, migrations, runtimeChecksum)
+		if err != nil {
+			return n, errf("non-transactional migration: %w", err)
 		}
 
-		return nil
+		return n, err
 	}
 
 	tx, err := m.db.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
-		return errf("start transaction: %v", err)
+		return 0, errf("start transaction: %v", err)
 	}
 
-	if err := m.applyMigrations(ctx, tx, schema.Version, migrations, runtimeChecksum); err != nil {
+	n, err := m.applyMigrations(ctx, tx, schema.Version, migrations, runtimeChecksum)
+	if err != nil {
 		if err2 := tx.Rollback(); err2 != nil {
-			return errf("rollback: %v", errors.Join(err2, err))
+			return 0, errf("rollback: %v", errors.Join(err2, err))
 		}
 
-		return err
+		return 0, err
 	}
 
 	if err := tx.Commit(); err != nil {
-		return errf("transaction commit: %v", err)
+		return 0, errf("transaction commit: %v", err)
 	}
 
-	return nil
+	return n, err
 }
 
 func (m *Migrator) CurrentSchemaVersion() (Schema, error) {
 	return currentSchemaVersion(context.Background(), m.db, m.dialect)
 }
 
-func (m *Migrator) applyMigrations(ctx context.Context, db LimitedDB, current int, migrations []string, checksums []string) error {
-	for i := current; i < len(migrations); i++ {
+func (m *Migrator) applyMigrations(ctx context.Context, db LimitedDB, current int, migrations []string, checksums []string) (n int, retErr error) {
+	if len(migrations)+1 != len(checksums) {
+		retErr = errf("mismatched migrations and checksums: expected %d checksums (+1 for initial state), but found %d", len(migrations), len(checksums))
+		return
+	}
+
+	from := current
+	if m.reapplyAll {
+		from = 0
+	}
+
+	for i := from; i < len(migrations); i++ {
 		if !m.migrationFilter(i + 1) {
 			continue
 		}
 
 		sch := Schema{Version: i + 1, Checksum: checksums[i+1]}
 		if err := applyMigration(ctx, db, m.dialect, sch, migrations[i]); err != nil {
-			return errf("apply migration script %d: %v", i+1, err)
+			retErr = errf("apply migration script %d: %v", i+1, err)
+			return
 		}
+
+		n++
 	}
 
-	return nil
+	return
 }
 
 func (m *Migrator) checksumHistory(migrations []string) []string {

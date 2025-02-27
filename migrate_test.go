@@ -22,7 +22,8 @@ type testSuite struct {
 	testSuiteConfig
 }
 
-// TODO1: pg test
+// TODO: validate n as well in all tests
+// TODO1: test withReapplyAll
 
 func newTestSuite(c testSuiteConfig) (*testSuite, error) {
 	if len(c.stringMigrations) < 2 {
@@ -49,7 +50,7 @@ func (s *testSuite) applyStringMigrations(t *testing.T) {
 		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if err := m.Apply(fromStringSource(s.stringMigrations[0])); err != nil {
+	if _, err := m.Apply(fromStringSource(s.stringMigrations[0])); err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
@@ -57,7 +58,7 @@ func (s *testSuite) applyStringMigrations(t *testing.T) {
 		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
+	if _, err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
@@ -76,7 +77,7 @@ func (s *testSuite) applyEmbeddedMigrations(t *testing.T) {
 		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if err := m.Apply(s.embeddedMigrations); err != nil {
+	if _, err := m.Apply(s.embeddedMigrations); err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
@@ -84,7 +85,7 @@ func (s *testSuite) applyEmbeddedMigrations(t *testing.T) {
 		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if err := m.Apply(s.embeddedMigrations); err != nil {
+	if _, err := m.Apply(s.embeddedMigrations); err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
@@ -105,7 +106,7 @@ func (s *testSuite) applyWithTxDisabled(t *testing.T) {
 		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if err := m.Apply(s.embeddedMigrations); err != nil {
+	if _, err := m.Apply(s.embeddedMigrations); err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
@@ -123,7 +124,7 @@ func (s *testSuite) rollsBackOnSQLError(t *testing.T) {
 		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if err := m.Apply(fromStringSource(s.stringMigrations[0])); err != nil {
+	if _, err := m.Apply(fromStringSource(s.stringMigrations[0])); err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
@@ -132,7 +133,7 @@ func (s *testSuite) rollsBackOnSQLError(t *testing.T) {
 	}
 
 	migrations := copyAppend(s.stringMigrations, "invalid migration script")
-	err := m.Apply(fromStringSource(migrations...))
+	_, err := m.Apply(fromStringSource(migrations...))
 
 	if err == nil {
 		t.Errorf("expected an error but got none")
@@ -156,7 +157,7 @@ func (s *testSuite) rollsBackOnValidationError(t *testing.T) {
 		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
+	if _, err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
@@ -165,7 +166,7 @@ func (s *testSuite) rollsBackOnValidationError(t *testing.T) {
 	}
 
 	// run the same migration again
-	if err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
+	if _, err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
@@ -177,7 +178,7 @@ func (s *testSuite) rollsBackOnValidationError(t *testing.T) {
 	corrupted[len(corrupted)-1] += "this string wasn't here before"
 
 	// run corrupted migration
-	err := m.Apply(fromStringSource(corrupted...))
+	_, err := m.Apply(fromStringSource(corrupted...))
 
 	if err == nil {
 		t.Errorf("expected an error but got none")
@@ -204,7 +205,7 @@ func (s *testSuite) applyWithNoChecksumValidation(t *testing.T) {
 		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
+	if _, err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
@@ -213,7 +214,7 @@ func (s *testSuite) applyWithNoChecksumValidation(t *testing.T) {
 	}
 
 	// run the same migration again
-	if err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
+	if _, err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
@@ -224,7 +225,7 @@ func (s *testSuite) applyWithNoChecksumValidation(t *testing.T) {
 	corrupted := copyAppend(s.stringMigrations)
 	corrupted[len(corrupted)-1] += "this string wasn't here before"
 
-	if err := m.Apply(fromStringSource(corrupted...)); err != nil {
+	if _, err := m.Apply(fromStringSource(corrupted...)); err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
@@ -234,7 +235,7 @@ func (s *testSuite) applyWithNoChecksumValidation(t *testing.T) {
 }
 
 func (s *testSuite) applyWithFilter(t *testing.T) {
-	db := createSQLiteDB(t)
+	db := s.dbHelper(t)
 	opts := []migrate.Opt{
 		migrate.WithFilter(func(migrationNumber int) bool {
 			return migrationNumber != 1
@@ -246,7 +247,7 @@ func (s *testSuite) applyWithFilter(t *testing.T) {
 		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if err := m.Apply(fromStringSource(s.stringMigrations[0])); err != nil {
+	if _, err := m.Apply(fromStringSource(s.stringMigrations[0])); err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
@@ -259,9 +260,8 @@ func (s *testSuite) applyWithFilter(t *testing.T) {
 			return migrationNumber != 2
 		}),
 	}
-
 	m = migrate.New(db, migrate.SQLiteDialect{}, opts...)
-	if err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
+	if _, err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
@@ -270,7 +270,7 @@ func (s *testSuite) applyWithFilter(t *testing.T) {
 	}
 
 	m = migrate.New(db, migrate.SQLiteDialect{})
-	if err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
+	if _, err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
 	}
 
