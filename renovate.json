@@ -6,6 +6,7 @@
     ":gomod"
   ],
   "dependencyDashboard": true,
+  "postUpdateOptions": ["gomodTidy"],
   "packageRules": [
     {
       "matchFileNames": ["migrate_test/**"],
