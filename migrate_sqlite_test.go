@@ -67,8 +67,9 @@ func TestMigrateWithSQLite(t *testing.T) {
 	t.Run("ApplyStringMigrations", suite.applyStringMigrations)
 	t.Run("ApplyEmbeddedMigrations", suite.applyEmbeddedMigrations)
 	t.Run("ApplyWithTxDisabled", suite.applyWithTxDisabled)
-	t.Run("RollsBackOnSQLError", suite.rollsBackOnSQLError)
-	t.Run("RollsBackOnValidationError", suite.rollsBackOnValidationError)
 	t.Run("ApplyWithNoChecksumValidation", suite.applyWithNoChecksumValidation)
 	t.Run("ApplyWithFilter", suite.applyWithFilter)
+	t.Run("ReapplyAll", suite.reapplyAll)
+	t.Run("RollsBackOnSQLError", suite.rollsBackOnSQLError)
+	t.Run("RollsBackOnValidationError", suite.rollsBackOnValidationError)
 }

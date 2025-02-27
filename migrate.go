@@ -146,7 +146,7 @@ func (m *Migrator) ApplyContext(ctx context.Context, from Source) (int, error) {
 		return 0, errf("schema integrity check failed: %v", err)
 	}
 
-	if schema.Version == len(migrations) {
+	if !m.reapplyAll && schema.Version >= len(migrations) {
 		return 0, nil // already up to date
 	}
 

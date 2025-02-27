@@ -22,9 +22,6 @@ type testSuite struct {
 	testSuiteConfig
 }
 
-// TODO: validate n as well in all tests
-// TODO1: test withReapplyAll
-
 func newTestSuite(c testSuiteConfig) (*testSuite, error) {
 	if len(c.stringMigrations) < 2 {
 		return nil, errors.New("stringMigrations must have at least 2 elements")
@@ -50,16 +47,25 @@ func (s *testSuite) applyStringMigrations(t *testing.T) {
 		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if _, err := m.Apply(fromStringSource(s.stringMigrations[0])); err != nil {
+	n, err := m.Apply(fromStringSource(s.stringMigrations[0]))
+	if err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
+	}
+
+	if got, want := n, 1; got != want {
+		t.Errorf("applied migrations: got %d, want %d", got, want)
 	}
 
 	if got, want := currentSchemaVersion(m), 1; got != want {
 		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if _, err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
+	n, err = m.Apply(fromStringSource(s.stringMigrations...))
+	if err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
+	}
+	if got, want := n, len(s.stringMigrations)-1; got != want {
+		t.Errorf("applied migrations: got %d, want %d", got, want)
 	}
 
 	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
@@ -77,16 +83,26 @@ func (s *testSuite) applyEmbeddedMigrations(t *testing.T) {
 		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if _, err := m.Apply(s.embeddedMigrations); err != nil {
+	n, err := m.Apply(s.embeddedMigrations)
+	if err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
+	}
+
+	if got, want := n, len(migrations); got != want {
+		t.Errorf("applied migrations: got %d, want %d", got, want)
 	}
 
 	if got, want := currentSchemaVersion(m), len(migrations); got != want {
 		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if _, err := m.Apply(s.embeddedMigrations); err != nil {
+	n, err = m.Apply(s.embeddedMigrations)
+	if err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
+	}
+
+	if got, want := n, 0; got != want {
+		t.Errorf("applied migrations: got %d, want %d", got, want)
 	}
 
 	if got, want := currentSchemaVersion(m), len(migrations); got != want {
@@ -102,94 +118,22 @@ func (s *testSuite) applyWithTxDisabled(t *testing.T) {
 	}
 	m := migrate.New(db, s.dialect, opts...)
 
-	if got, want := currentSchemaVersion(m), -1; got != want {
-		t.Errorf("schema version mismatch: got %v, want %v", got, want)
-	}
-
-	if _, err := m.Apply(s.embeddedMigrations); err != nil {
-		t.Errorf("m.Apply() returned an error: %v", err)
-	}
-
 	migrations, _ := s.embeddedMigrations.List()
+
+	if got, want := currentSchemaVersion(m), -1; got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
+	}
+
+	n, err := m.Apply(s.embeddedMigrations)
+	if err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
+	}
+
+	if got, want := n, len(migrations); got != want {
+		t.Errorf("applied migrations: got %d, want %d", got, want)
+	}
+
 	if got, want := currentSchemaVersion(m), len(migrations); got != want {
-		t.Errorf("schema version mismatch: got %v, want %v", got, want)
-	}
-}
-
-func (s *testSuite) rollsBackOnSQLError(t *testing.T) {
-	db := s.dbHelper(t)
-	m := migrate.New(db, s.dialect)
-
-	if got, want := currentSchemaVersion(m), -1; got != want {
-		t.Errorf("schema version mismatch: got %v, want %v", got, want)
-	}
-
-	if _, err := m.Apply(fromStringSource(s.stringMigrations[0])); err != nil {
-		t.Errorf("m.Apply() returned an error: %v", err)
-	}
-
-	if got, want := currentSchemaVersion(m), 1; got != want {
-		t.Errorf("schema version mismatch: got %v, want %v", got, want)
-	}
-
-	migrations := copyAppend(s.stringMigrations, "invalid migration script")
-	_, err := m.Apply(fromStringSource(migrations...))
-
-	if err == nil {
-		t.Errorf("expected an error but got none")
-	}
-
-	gotErr, wantErr := err.Error(), `apply migration script 3: exec context: SQL logic error: near "invalid": syntax error (1)`
-	if gotErr != wantErr {
-		t.Errorf("unexpected error: got %q, want %q", gotErr, wantErr)
-	}
-
-	if got, want := currentSchemaVersion(m), 1; got != want {
-		t.Errorf("schema version mismatch: got %v, want %v", got, want)
-	}
-}
-
-func (s *testSuite) rollsBackOnValidationError(t *testing.T) {
-	db := s.dbHelper(t)
-	m := migrate.New(db, s.dialect)
-
-	if got, want := currentSchemaVersion(m), -1; got != want {
-		t.Errorf("schema version mismatch: got %v, want %v", got, want)
-	}
-
-	if _, err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
-		t.Errorf("m.Apply() returned an error: %v", err)
-	}
-
-	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
-		t.Errorf("schema version mismatch: got %v, want %v", got, want)
-	}
-
-	// run the same migration again
-	if _, err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
-		t.Errorf("m.Apply() returned an error: %v", err)
-	}
-
-	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
-		t.Errorf("schema version mismatch: got %v, want %v", got, want)
-	}
-
-	corrupted := copyAppend(s.stringMigrations)
-	corrupted[len(corrupted)-1] += "this string wasn't here before"
-
-	// run corrupted migration
-	_, err := m.Apply(fromStringSource(corrupted...))
-
-	if err == nil {
-		t.Errorf("expected an error but got none")
-	}
-
-	gotErr, wantErr := err.Error(), `schema integrity check failed: runtime checksum "77671fcde23b60aff173d65f98bc3863ce38dc83" != database checksum "8165caac3ad7938e2c5aed4f14355fb084b83ef1"`
-	if gotErr != wantErr {
-		t.Errorf("unexpected error: got %q, want %q", gotErr, wantErr)
-	}
-
-	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
 		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 }
@@ -205,8 +149,13 @@ func (s *testSuite) applyWithNoChecksumValidation(t *testing.T) {
 		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if _, err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
+	n, err := m.Apply(fromStringSource(s.stringMigrations...))
+	if err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
+	}
+
+	if got, want := n, len(s.stringMigrations); got != want {
+		t.Errorf("applied migrations: got %d, want %d", got, want)
 	}
 
 	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
@@ -214,19 +163,34 @@ func (s *testSuite) applyWithNoChecksumValidation(t *testing.T) {
 	}
 
 	// run the same migration again
-	if _, err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
+	//
+
+	n, err = m.Apply(fromStringSource(s.stringMigrations...))
+	if err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
+	}
+
+	if got, want := n, 0; got != want {
+		t.Errorf("applied migrations: got %d, want %d", got, want)
 	}
 
 	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
 		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
+	// run corrupted migration
+	//
+
 	corrupted := copyAppend(s.stringMigrations)
 	corrupted[len(corrupted)-1] += "this string wasn't here before"
 
-	if _, err := m.Apply(fromStringSource(corrupted...)); err != nil {
+	n, err = m.Apply(fromStringSource(corrupted...))
+	if err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
+	}
+
+	if got, want := n, 0; got != want {
+		t.Errorf("applied migrations: got %d, want %d", got, want)
 	}
 
 	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
@@ -247,8 +211,13 @@ func (s *testSuite) applyWithFilter(t *testing.T) {
 		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	if _, err := m.Apply(fromStringSource(s.stringMigrations[0])); err != nil {
+	n, err := m.Apply(fromStringSource(s.stringMigrations[0]))
+	if err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
+	}
+
+	if got, want := n, 0; got != want {
+		t.Errorf("applied migrations: got %d, want %d", got, want)
 	}
 
 	if got, want := currentSchemaVersion(m), 0; got != want {
@@ -261,8 +230,14 @@ func (s *testSuite) applyWithFilter(t *testing.T) {
 		}),
 	}
 	m = migrate.New(db, migrate.SQLiteDialect{}, opts...)
-	if _, err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
+
+	n, err = m.Apply(fromStringSource(s.stringMigrations...))
+	if err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
+	}
+
+	if got, want := n, 1; got != want {
+		t.Errorf("applied migrations: got %d, want %d", got, want)
 	}
 
 	if got, want := currentSchemaVersion(m), 1; got != want {
@@ -270,8 +245,157 @@ func (s *testSuite) applyWithFilter(t *testing.T) {
 	}
 
 	m = migrate.New(db, migrate.SQLiteDialect{})
-	if _, err := m.Apply(fromStringSource(s.stringMigrations...)); err != nil {
+
+	n, err = m.Apply(fromStringSource(s.stringMigrations...))
+	if err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
+	}
+
+	if got, want := n, len(s.stringMigrations)-1; got != want {
+		t.Errorf("applied migrations: got %d, want %d", got, want)
+	}
+
+	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
+	}
+}
+
+func (s *testSuite) reapplyAll(t *testing.T) {
+	db := s.dbHelper(t)
+	m := migrate.New(db, migrate.SQLiteDialect{})
+
+	n, err := m.Apply(fromStringSource(s.stringMigrations...))
+	if err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
+	}
+
+	if got, want := n, len(s.stringMigrations); got != want {
+		t.Errorf("applied migrations: got %d, want %d", got, want)
+	}
+
+	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
+	}
+
+	opts := []migrate.Opt{
+		migrate.WithReapplyAll(true),
+	}
+	m = migrate.New(db, migrate.SQLiteDialect{}, opts...)
+
+	n, err = m.Apply(fromStringSource(s.stringMigrations...))
+	if err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
+	}
+
+	if got, want := n, len(s.stringMigrations); got != want {
+		t.Errorf("applied migrations: got %d, want %d", got, want)
+	}
+
+	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
+	}
+}
+
+func (s *testSuite) rollsBackOnSQLError(t *testing.T) {
+	db := s.dbHelper(t)
+	m := migrate.New(db, s.dialect)
+
+	if got, want := currentSchemaVersion(m), -1; got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
+	}
+
+	n, err := m.Apply(fromStringSource(s.stringMigrations[0]))
+	if err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
+	}
+	if got, want := n, 1; got != want {
+		t.Errorf("applied migrations: got %d, want %d", got, want)
+	}
+
+	if got, want := currentSchemaVersion(m), 1; got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
+	}
+
+	// run corrupted migration
+	//
+
+	corrupted := copyAppend(s.stringMigrations, "invalid migration script")
+
+	n, err = m.Apply(fromStringSource(corrupted...))
+	if err == nil {
+		t.Errorf("expected an error but got none")
+	}
+
+	if got, want := n, 0; got != want {
+		t.Errorf("applied migrations: got %d, want %d", got, want)
+	}
+
+	gotErr, wantErr := err.Error(), `apply migration script 3: exec context: SQL logic error: near "invalid": syntax error (1)`
+	if gotErr != wantErr {
+		t.Errorf("unexpected error: got %q, want %q", gotErr, wantErr)
+	}
+
+	if got, want := currentSchemaVersion(m), 1; got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
+	}
+}
+
+func (s *testSuite) rollsBackOnValidationError(t *testing.T) {
+	db := s.dbHelper(t)
+	m := migrate.New(db, s.dialect)
+
+	if got, want := currentSchemaVersion(m), -1; got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
+	}
+
+	n, err := m.Apply(fromStringSource(s.stringMigrations...))
+	if err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
+	}
+
+	if got, want := n, len(s.stringMigrations); got != want {
+		t.Errorf("applied migrations: got %d, want %d", got, want)
+	}
+
+	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
+	}
+
+	// run the same migration again
+	//
+
+	n, err = m.Apply(fromStringSource(s.stringMigrations...))
+	if err != nil {
+		t.Errorf("m.Apply() returned an error: %v", err)
+	}
+
+	if got, want := n, 0; got != want {
+		t.Errorf("applied migrations: got %d, want %d", got, want)
+	}
+
+	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
+		t.Errorf("schema version mismatch: got %v, want %v", got, want)
+	}
+
+	corrupted := copyAppend(s.stringMigrations)
+	corrupted[len(corrupted)-1] += "this string wasn't here before"
+
+	// run corrupted migration
+	//
+
+	n, err = m.Apply(fromStringSource(corrupted...))
+
+	if err == nil {
+		t.Errorf("expected an error but got none")
+	}
+
+	if got, want := n, 0; got != want {
+		t.Errorf("applied migrations: got %d, want %d", got, want)
+	}
+
+	gotErr, wantErr := err.Error(), `schema integrity check failed: runtime checksum "77671fcde23b60aff173d65f98bc3863ce38dc83" != database checksum "8165caac3ad7938e2c5aed4f14355fb084b83ef1"`
+	if gotErr != wantErr {
+		t.Errorf("unexpected error: got %q, want %q", gotErr, wantErr)
 	}
 
 	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
