@@ -8,11 +8,12 @@ import (
 	"testing"
 
 	"github.com/ladzaretti/migrate"
+	"github.com/ladzaretti/migrate/types"
 )
 
 type testSuiteConfig struct {
 	dbHelper           func(*testing.T) *sql.DB
-	dialect            migrate.DialectAdapter
+	dialect            types.Dialect
 	embeddedMigrations migrate.EmbeddedMigrations
 	stringMigrations   []string
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
 	"github.com/ladzaretti/migrate"
+	"github.com/ladzaretti/migrate/migratetest"
 )
 
 var (
@@ -112,6 +113,12 @@ func TestMigrateWithPostgres(t *testing.T) {
 
 	suite, cleanup := setupPostgresTestSuite(context.Background(), t, stringMigrations, embeddedPostgresMigrations)
 	defer cleanup()
+
+	t.Run("TestDialect", func(t *testing.T) {
+		if err := migratetest.TestDialect(t.Context(), suite.dbHelper(t), migrate.PostgreSQLDialect{}); err != nil {
+			t.Fatalf("TestDialect: %v", err)
+		}
+	})
 
 	t.Run("ApplyStringMigrations", suite.applyStringMigrations)
 	t.Run("ApplyEmbeddedMigrations", suite.applyEmbeddedMigrations)

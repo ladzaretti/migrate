@@ -1,14 +1,12 @@
 package migrate
 
-type DialectAdapter interface {
-	CreateVersionTableQuery() string
-	CurrentVersionQuery() string
-	SaveVersionQuery() string
-}
+import (
+	"github.com/ladzaretti/migrate/types"
+)
 
 type SQLiteDialect struct{}
 
-var _ DialectAdapter = SQLiteDialect{}
+var _ types.Dialect = SQLiteDialect{}
 
 func (d SQLiteDialect) CreateVersionTableQuery() string {
 	return `
@@ -35,7 +33,7 @@ func (d SQLiteDialect) SaveVersionQuery() string {
 
 type PostgreSQLDialect struct{}
 
-var _ DialectAdapter = PostgreSQLDialect{}
+var _ types.Dialect = PostgreSQLDialect{}
 
 func (d PostgreSQLDialect) CreateVersionTableQuery() string {
 	return `
