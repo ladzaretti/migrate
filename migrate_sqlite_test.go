@@ -5,37 +5,19 @@ import (
 	"embed"
 	"testing"
 
+	_ "modernc.org/sqlite"
+
 	"github.com/ladzaretti/migrate"
 )
 
 var (
 	//go:embed testdata/sqlite/migrations
-	embedFS embed.FS
+	embedSQLiteFS embed.FS
 
-	embeddedMigrations = migrate.EmbeddedMigrations{
-		FS:   embedFS,
+	embeddedSQLiteMigrations = migrate.EmbeddedMigrations{
+		FS:   embedSQLiteFS,
 		Path: "testdata/sqlite/migrations",
 	}
-)
-
-var (
-	migration01 = `
-	CREATE TABLE
-		IF NOT EXISTS testing_migration_1 (
-			id INTEGER PRIMARY KEY,
-			another_id INTEGER,
-			something_else TEXT
-		);
-	    `
-
-	migration02 = `
-	CREATE TABLE
-		IF NOT EXISTS testing_migration_2 (
-			id INTEGER PRIMARY KEY,
-			another_id INTEGER,
-			something_else TEXT
-		);
-		`
 )
 
 // createSQLiteDB is a testing helper that creates an in-memory sqlite
@@ -54,11 +36,28 @@ func createSQLiteDB(t *testing.T) *sql.DB {
 }
 
 func TestMigrateWithSQLite(t *testing.T) {
+	stringMigrations := []string{
+		`CREATE TABLE
+			IF NOT EXISTS testing_migration_1 (
+				id INTEGER PRIMARY KEY,
+				another_id INTEGER,
+				something_else TEXT
+			);
+		`,
+		`CREATE TABLE
+			IF NOT EXISTS testing_migration_2 (
+				id INTEGER PRIMARY KEY,
+				another_id INTEGER,
+				something_else TEXT
+			);
+		`,
+	}
+
 	suite, err := newTestSuite(testSuiteConfig{
 		dbHelper:           createSQLiteDB,
 		dialect:            migrate.SQLiteDialect{},
-		embeddedMigrations: embeddedMigrations,
-		stringMigrations:   []string{migration01, migration02},
+		embeddedMigrations: embeddedSQLiteMigrations,
+		stringMigrations:   stringMigrations,
 	})
 	if err != nil {
 		t.Fatalf("create test suite: %v", err)

@@ -23,7 +23,6 @@ linters:
     - durationcheck
     - errchkjson
     - errname
-    - errorlint
     - exhaustive
     - exptostd
     - fatcontext

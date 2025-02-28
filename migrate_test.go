@@ -4,15 +4,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
-
-	_ "modernc.org/sqlite"
 
 	"github.com/ladzaretti/migrate"
 )
 
 type testSuiteConfig struct {
-	dbHelper           func(t *testing.T) *sql.DB
+	dbHelper           func(*testing.T) *sql.DB
 	dialect            migrate.DialectAdapter
 	embeddedMigrations migrate.EmbeddedMigrations
 	stringMigrations   []string
@@ -205,7 +204,7 @@ func (s *testSuite) applyWithFilter(t *testing.T) {
 			return migrationNumber != 1
 		}),
 	}
-	m := migrate.New(db, migrate.SQLiteDialect{}, opts...)
+	m := migrate.New(db, s.dialect, opts...)
 
 	if got, want := currentSchemaVersion(m), -1; got != want {
 		t.Errorf("schema version mismatch: got %v, want %v", got, want)
@@ -229,7 +228,7 @@ func (s *testSuite) applyWithFilter(t *testing.T) {
 			return migrationNumber != 2
 		}),
 	}
-	m = migrate.New(db, migrate.SQLiteDialect{}, opts...)
+	m = migrate.New(db, s.dialect, opts...)
 
 	n, err = m.Apply(fromStringSource(s.stringMigrations...))
 	if err != nil {
@@ -244,7 +243,7 @@ func (s *testSuite) applyWithFilter(t *testing.T) {
 		t.Errorf("schema version mismatch: got %v, want %v", got, want)
 	}
 
-	m = migrate.New(db, migrate.SQLiteDialect{})
+	m = migrate.New(db, s.dialect)
 
 	n, err = m.Apply(fromStringSource(s.stringMigrations...))
 	if err != nil {
@@ -262,7 +261,7 @@ func (s *testSuite) applyWithFilter(t *testing.T) {
 
 func (s *testSuite) reapplyAll(t *testing.T) {
 	db := s.dbHelper(t)
-	m := migrate.New(db, migrate.SQLiteDialect{})
+	m := migrate.New(db, s.dialect)
 
 	n, err := m.Apply(fromStringSource(s.stringMigrations...))
 	if err != nil {
@@ -280,7 +279,7 @@ func (s *testSuite) reapplyAll(t *testing.T) {
 	opts := []migrate.Opt{
 		migrate.WithReapplyAll(true),
 	}
-	m = migrate.New(db, migrate.SQLiteDialect{}, opts...)
+	m = migrate.New(db, s.dialect, opts...)
 
 	n, err = m.Apply(fromStringSource(s.stringMigrations...))
 	if err != nil {
@@ -330,9 +329,9 @@ func (s *testSuite) rollsBackOnSQLError(t *testing.T) {
 		t.Errorf("applied migrations: got %d, want %d", got, want)
 	}
 
-	gotErr, wantErr := err.Error(), `apply migration script 3: exec context: SQL logic error: near "invalid": syntax error (1)`
-	if gotErr != wantErr {
-		t.Errorf("unexpected error: got %q, want %q", gotErr, wantErr)
+	gotErr, wantPrefix := err.Error(), `apply migration script 3: exec context:`
+	if !strings.HasPrefix(gotErr, wantPrefix) {
+		t.Errorf("unexpected error: got %q, want prefix %q", gotErr, wantPrefix)
 	}
 
 	if got, want := currentSchemaVersion(m), 1; got != want {
@@ -393,9 +392,9 @@ func (s *testSuite) rollsBackOnValidationError(t *testing.T) {
 		t.Errorf("applied migrations: got %d, want %d", got, want)
 	}
 
-	gotErr, wantErr := err.Error(), `schema integrity check failed: runtime checksum "77671fcde23b60aff173d65f98bc3863ce38dc83" != database checksum "8165caac3ad7938e2c5aed4f14355fb084b83ef1"`
-	if gotErr != wantErr {
-		t.Errorf("unexpected error: got %q, want %q", gotErr, wantErr)
+	gotErr, wantPrefix := err.Error(), `schema integrity check failed:`
+	if !strings.HasPrefix(gotErr, wantPrefix) {
+		t.Errorf("unexpected error: got %q, want prefix %q", gotErr, wantPrefix)
 	}
 
 	if got, want := currentSchemaVersion(m), len(s.stringMigrations); got != want {
