@@ -2,7 +2,7 @@ module github.com/ladzaretti/migrate
 
 go 1.23.4
 
-require modernc.org/sqlite v1.35.0
+require modernc.org/sqlite v1.36.0
 
 require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
@@ -66,7 +66,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.24.0 // indirect
 	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/exp v0.0.0-20230315142452-642cacee5cc0 // indirect
-	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	modernc.org/libc v1.61.13 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
