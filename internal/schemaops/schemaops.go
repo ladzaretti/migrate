@@ -1,4 +1,4 @@
-package schema
+package schemaops
 
 import (
 	"context"
@@ -9,11 +9,13 @@ import (
 	"github.com/ladzaretti/migrate/types"
 )
 
+var ErrNoSchemaVersion = errors.New("no schema version found")
+
 func CreateTable(ctx context.Context, db types.LimitedDB, dialect types.Dialect) error {
 	return execContext(ctx, db, dialect.CreateVersionTableQuery())
 }
 
-func CurrentVersion(ctx context.Context, db types.LimitedDB, dialect types.Dialect) (types.Schema, error) {
+func CurrentVersion(ctx context.Context, db types.LimitedDB, dialect types.Dialect) (*types.Schema, error) {
 	row := db.QueryRowContext(ctx, dialect.CurrentVersionQuery())
 
 	return scanSchema(row)
@@ -32,17 +34,17 @@ func execContext(ctx context.Context, db types.LimitedDB, query string, args ...
 	return nil
 }
 
-func scanSchema(row *sql.Row) (types.Schema, error) {
+func scanSchema(row *sql.Row) (*types.Schema, error) {
 	ver := types.Schema{}
 
-	if err := row.Scan(&ver.Version, &ver.Checksum); err != nil {
+	if err := row.Scan(&ver.ID, &ver.Version, &ver.Checksum); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return ver, nil
+			return nil, ErrNoSchemaVersion
 		}
 
 		//nolint:errorlint // errors are not intended to be matched by the user
-		return types.Schema{}, fmt.Errorf("scan schema version: %v", err)
+		return &types.Schema{}, fmt.Errorf("scan schema version: %v", err)
 	}
 
-	return ver, nil
+	return &ver, nil
 }

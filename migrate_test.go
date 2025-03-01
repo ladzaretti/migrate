@@ -1,6 +1,7 @@
 package migrate_test
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -408,12 +409,12 @@ func fromStringSource(s ...string) migrate.StringMigrations {
 }
 
 func currentSchemaVersion(m *migrate.Migrator) int {
-	currentVersion, err := m.CurrentSchemaVersion()
+	v, err := m.CurrentSchemaVersion(context.Background())
 	if err != nil {
 		return -1
 	}
 
-	return currentVersion.Version
+	return v.Version
 }
 
 func copyAppend[T any](s []T, el ...T) []T {

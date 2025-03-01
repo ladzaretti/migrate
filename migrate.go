@@ -37,7 +37,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/ladzaretti/migrate/internal/schema"
+	"github.com/ladzaretti/migrate/internal/schemaops"
 	"github.com/ladzaretti/migrate/types"
 )
 
@@ -120,11 +120,11 @@ func (m *Migrator) ApplyContext(ctx context.Context, from Source) (int, error) {
 		return 0, errf("list migrations source: %v", err)
 	}
 
-	if err := schema.CreateTable(ctx, m.db, m.dialect); err != nil {
+	if err := schemaops.CreateTable(ctx, m.db, m.dialect); err != nil {
 		return 0, errf("create schema version table: %v", err)
 	}
 
-	schema, err := schema.CurrentVersion(ctx, m.db, m.dialect)
+	schema, err := m.CurrentSchemaVersion(ctx)
 	if err != nil {
 		return 0, errf("current schema version: %v", err)
 	}
@@ -172,9 +172,18 @@ func (m *Migrator) ApplyContext(ctx context.Context, from Source) (int, error) {
 	return n, err
 }
 
-func (m *Migrator) CurrentSchemaVersion() (types.Schema, error) {
-	//nolint:wrapcheck // error is returned from an internal package
-	return schema.CurrentVersion(context.Background(), m.db, m.dialect)
+func (m *Migrator) CurrentSchemaVersion(ctx context.Context) (types.Schema, error) {
+	schema, err := schemaops.CurrentVersion(ctx, m.db, m.dialect)
+	if err != nil && !errors.Is(err, schemaops.ErrNoSchemaVersion) {
+		//nolint:wrapcheck // error is returned from an internal package
+		return types.Schema{}, err
+	}
+
+	if schema != nil {
+		return *schema, nil
+	}
+
+	return types.Schema{}, nil
 }
 
 func (m *Migrator) applyMigrations(ctx context.Context, db types.LimitedDB, current int, migrations []string, checksums []string) (n int, retErr error) {
@@ -237,7 +246,7 @@ func applyMigration(ctx context.Context, db types.LimitedDB, dialect types.Diale
 		return err
 	}
 
-	if err := schema.SaveVersion(ctx, db, dialect, sch); err != nil {
+	if err := schemaops.SaveVersion(ctx, db, dialect, sch); err != nil {
 		//nolint:wrapcheck // error is returned from an internal package
 		return err
 	}
