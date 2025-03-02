@@ -15,13 +15,13 @@ func CreateTable(ctx context.Context, db types.LimitedDB, dialect types.Dialect)
 	return execContext(ctx, db, dialect.CreateVersionTableQuery())
 }
 
-func CurrentVersion(ctx context.Context, db types.LimitedDB, dialect types.Dialect) (*types.Schema, error) {
+func CurrentVersion(ctx context.Context, db types.LimitedDB, dialect types.Dialect) (*types.SchemaVersion, error) {
 	row := db.QueryRowContext(ctx, dialect.CurrentVersionQuery())
 
-	return scanSchema(row)
+	return scanVersion(row)
 }
 
-func SaveVersion(ctx context.Context, db types.LimitedDB, dialect types.Dialect, s types.Schema) error {
+func SaveVersion(ctx context.Context, db types.LimitedDB, dialect types.Dialect, s types.SchemaVersion) error {
 	return execContext(ctx, db, dialect.SaveVersionQuery(), s.Version, s.Checksum)
 }
 
@@ -34,8 +34,8 @@ func execContext(ctx context.Context, db types.LimitedDB, query string, args ...
 	return nil
 }
 
-func scanSchema(row *sql.Row) (*types.Schema, error) {
-	ver := types.Schema{}
+func scanVersion(row *sql.Row) (*types.SchemaVersion, error) {
+	ver := types.SchemaVersion{}
 
 	if err := row.Scan(&ver.ID, &ver.Version, &ver.Checksum); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -43,7 +43,7 @@ func scanSchema(row *sql.Row) (*types.Schema, error) {
 		}
 
 		//nolint:errorlint // errors are not intended to be matched by the user
-		return &types.Schema{}, fmt.Errorf("scan schema version: %v", err)
+		return &types.SchemaVersion{}, fmt.Errorf("scan schema version: %v", err)
 	}
 
 	return &ver, nil

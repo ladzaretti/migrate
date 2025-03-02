@@ -20,7 +20,7 @@ func TestDialect(ctx context.Context, db *sql.DB, dialect types.Dialect) error {
 		return fmt.Errorf("fetch current schema version: %w", err)
 	}
 
-	sch := types.Schema{
+	sch := types.SchemaVersion{
 		ID:       0,
 		Version:  100,
 		Checksum: "checksum",

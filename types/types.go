@@ -5,13 +5,13 @@ import (
 	"database/sql"
 )
 
-type Schema struct {
+type SchemaVersion struct {
 	ID       int
 	Version  int
 	Checksum string
 }
 
-func (s *Schema) Equal(o *Schema) bool {
+func (s *SchemaVersion) Equal(o *SchemaVersion) bool {
 	if s == o {
 		return true
 	}

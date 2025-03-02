@@ -172,18 +172,18 @@ func (m *Migrator) ApplyContext(ctx context.Context, from Source) (int, error) {
 	return n, err
 }
 
-func (m *Migrator) CurrentSchemaVersion(ctx context.Context) (types.Schema, error) {
+func (m *Migrator) CurrentSchemaVersion(ctx context.Context) (types.SchemaVersion, error) {
 	schema, err := schemaops.CurrentVersion(ctx, m.db, m.dialect)
 	if err != nil && !errors.Is(err, schemaops.ErrNoSchemaVersion) {
 		//nolint:wrapcheck // error is returned from an internal package
-		return types.Schema{}, err
+		return types.SchemaVersion{}, err
 	}
 
 	if schema != nil {
 		return *schema, nil
 	}
 
-	return types.Schema{}, nil
+	return types.SchemaVersion{}, nil
 }
 
 func (m *Migrator) applyMigrations(ctx context.Context, db types.LimitedDB, current int, migrations []string, checksums []string) (n int, retErr error) {
@@ -202,7 +202,7 @@ func (m *Migrator) applyMigrations(ctx context.Context, db types.LimitedDB, curr
 			continue
 		}
 
-		sch := types.Schema{Version: i + 1, Checksum: checksums[i+1]}
+		sch := types.SchemaVersion{Version: i + 1, Checksum: checksums[i+1]}
 		if err := applyMigration(ctx, db, m.dialect, sch, migrations[i]); err != nil {
 			retErr = errf("apply migration script %d: %v", i+1, err)
 			return
@@ -225,28 +225,28 @@ func (m *Migrator) checksumHistory(migrations []string) []string {
 	return history
 }
 
-func (m *Migrator) validateChecksum(dbSchema types.Schema, runtimeChecksum []string) error {
+func (m *Migrator) validateChecksum(schema types.SchemaVersion, runtimeChecksum []string) error {
 	if !m.withChecksumValidation {
 		return nil
 	}
 
-	if dbSchema.Version == 0 {
+	if schema.Version == 0 {
 		return nil
 	}
 
-	if dbSchema.Checksum != runtimeChecksum[dbSchema.Version] {
-		return errf("runtime checksum %q != database checksum %q", runtimeChecksum[dbSchema.Version], dbSchema.Checksum)
+	if schema.Checksum != runtimeChecksum[schema.Version] {
+		return errf("runtime checksum %q != database checksum %q", runtimeChecksum[schema.Version], schema.Checksum)
 	}
 
 	return nil
 }
 
-func applyMigration(ctx context.Context, db types.LimitedDB, dialect types.Dialect, sch types.Schema, migration string) error {
+func applyMigration(ctx context.Context, db types.LimitedDB, dialect types.Dialect, schema types.SchemaVersion, migration string) error {
 	if err := execContext(ctx, db, migration); err != nil {
 		return err
 	}
 
-	if err := schemaops.SaveVersion(ctx, db, dialect, sch); err != nil {
+	if err := schemaops.SaveVersion(ctx, db, dialect, schema); err != nil {
 		//nolint:wrapcheck // error is returned from an internal package
 		return err
 	}
