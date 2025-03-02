@@ -1,6 +1,6 @@
 module github.com/ladzaretti/migrate
 
-go 1.23.4
+go 1.24.0
 
 require modernc.org/sqlite v1.36.0
 

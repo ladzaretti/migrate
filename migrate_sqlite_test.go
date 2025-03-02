@@ -8,6 +8,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/ladzaretti/migrate"
+	"github.com/ladzaretti/migrate/migratetest"
 )
 
 var (
@@ -62,6 +63,12 @@ func TestMigrateWithSQLite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create test suite: %v", err)
 	}
+
+	t.Run("TestDialect", func(t *testing.T) {
+		if err := migratetest.TestDialect(t.Context(), suite.dbHelper(t), migrate.SQLiteDialect{}); err != nil {
+			t.Fatalf("TestDialect: %v", err)
+		}
+	})
 
 	t.Run("ApplyStringMigrations", suite.applyStringMigrations)
 	t.Run("ApplyEmbeddedMigrations", suite.applyEmbeddedMigrations)

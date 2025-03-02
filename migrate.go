@@ -36,6 +36,9 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+
+	"github.com/ladzaretti/migrate/internal/schemaops"
+	"github.com/ladzaretti/migrate/types"
 )
 
 // Checksum is a function type that generates a unique checksum for the input string.
@@ -44,20 +47,9 @@ type Checksum func(s string) string
 
 type Filter func(migrationNumber int) bool
 
-type LimitedDB interface {
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
-	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-}
-
-type Schema struct {
-	Version  int
-	Checksum string
-}
-
 type Migrator struct {
 	db                     *sql.DB
-	dialect                DialectAdapter
+	dialect                types.Dialect
 	migrationFilter        Filter
 	checksum               Checksum
 	withChecksumValidation bool
@@ -67,7 +59,7 @@ type Migrator struct {
 
 type Opt func(*Migrator)
 
-func New(db *sql.DB, dialect DialectAdapter, opts ...Opt) *Migrator {
+func New(db *sql.DB, dialect types.Dialect, opts ...Opt) *Migrator {
 	m := &Migrator{
 		db:                     db,
 		dialect:                dialect,
@@ -128,11 +120,11 @@ func (m *Migrator) ApplyContext(ctx context.Context, from Source) (int, error) {
 		return 0, errf("list migrations source: %v", err)
 	}
 
-	if err := createSchemaVersionTable(ctx, m.db, m.dialect); err != nil {
+	if err := schemaops.CreateTable(ctx, m.db, m.dialect); err != nil {
 		return 0, errf("create schema version table: %v", err)
 	}
 
-	schema, err := currentSchemaVersion(ctx, m.db, m.dialect)
+	schema, err := m.CurrentSchemaVersion(ctx)
 	if err != nil {
 		return 0, errf("current schema version: %v", err)
 	}
@@ -180,11 +172,21 @@ func (m *Migrator) ApplyContext(ctx context.Context, from Source) (int, error) {
 	return n, err
 }
 
-func (m *Migrator) CurrentSchemaVersion() (Schema, error) {
-	return currentSchemaVersion(context.Background(), m.db, m.dialect)
+func (m *Migrator) CurrentSchemaVersion(ctx context.Context) (types.SchemaVersion, error) {
+	schema, err := schemaops.CurrentVersion(ctx, m.db, m.dialect)
+	if err != nil && !errors.Is(err, schemaops.ErrNoSchemaVersion) {
+		//nolint:wrapcheck // error is returned from an internal package
+		return types.SchemaVersion{}, err
+	}
+
+	if schema != nil {
+		return *schema, nil
+	}
+
+	return types.SchemaVersion{}, nil
 }
 
-func (m *Migrator) applyMigrations(ctx context.Context, db LimitedDB, current int, migrations []string, checksums []string) (n int, retErr error) {
+func (m *Migrator) applyMigrations(ctx context.Context, db types.LimitedDB, current int, migrations []string, checksums []string) (n int, retErr error) {
 	if len(migrations)+1 != len(checksums) {
 		retErr = errf("mismatched migrations and checksums: expected %d checksums (+1 for initial state), but found %d", len(migrations), len(checksums))
 		return
@@ -200,7 +202,7 @@ func (m *Migrator) applyMigrations(ctx context.Context, db LimitedDB, current in
 			continue
 		}
 
-		sch := Schema{Version: i + 1, Checksum: checksums[i+1]}
+		sch := types.SchemaVersion{Version: i + 1, Checksum: checksums[i+1]}
 		if err := applyMigration(ctx, db, m.dialect, sch, migrations[i]); err != nil {
 			retErr = errf("apply migration script %d: %v", i+1, err)
 			return
@@ -223,69 +225,42 @@ func (m *Migrator) checksumHistory(migrations []string) []string {
 	return history
 }
 
-func (m *Migrator) validateChecksum(dbSchema Schema, runtimeChecksum []string) error {
+func (m *Migrator) validateChecksum(schema types.SchemaVersion, runtimeChecksum []string) error {
 	if !m.withChecksumValidation {
 		return nil
 	}
 
-	if dbSchema.Version == 0 {
+	if schema.Version == 0 {
 		return nil
 	}
 
-	if dbSchema.Checksum != runtimeChecksum[dbSchema.Version] {
-		return errf("runtime checksum %q != database checksum %q", runtimeChecksum[dbSchema.Version], dbSchema.Checksum)
+	if schema.Checksum != runtimeChecksum[schema.Version] {
+		return errf("runtime checksum %q != database checksum %q", runtimeChecksum[schema.Version], schema.Checksum)
 	}
 
 	return nil
 }
 
-func applyMigration(ctx context.Context, db LimitedDB, dia DialectAdapter, sch Schema, migration string) error {
+func applyMigration(ctx context.Context, db types.LimitedDB, dialect types.Dialect, schema types.SchemaVersion, migration string) error {
 	if err := execContext(ctx, db, migration); err != nil {
 		return err
 	}
 
-	if err := saveSchemaVersion(ctx, db, dia, sch); err != nil {
+	if err := schemaops.SaveVersion(ctx, db, dialect, schema); err != nil {
+		//nolint:wrapcheck // error is returned from an internal package
 		return err
 	}
 
 	return nil
 }
 
-func createSchemaVersionTable(ctx context.Context, db LimitedDB, dialect DialectAdapter) error {
-	return execContext(ctx, db, dialect.CreateVersionTableQuery())
-}
-
-func saveSchemaVersion(ctx context.Context, db LimitedDB, dialect DialectAdapter, s Schema) error {
-	return execContext(ctx, db, dialect.SaveVersionQuery(), s.Version, s.Checksum)
-}
-
-func currentSchemaVersion(ctx context.Context, db LimitedDB, dialect DialectAdapter) (Schema, error) {
-	row := db.QueryRowContext(ctx, dialect.CurrentVersionQuery())
-
-	return scanSchema(row)
-}
-
-func execContext(ctx context.Context, db LimitedDB, query string, args ...any) error {
+func execContext(ctx context.Context, db types.LimitedDB, query string, args ...any) error {
 	if _, err := db.ExecContext(ctx, query, args...); err != nil {
 		//nolint:errorlint // errors are not intended to be matched by the user
 		return fmt.Errorf("exec context: %v", err)
 	}
 
 	return nil
-}
-
-func scanSchema(row *sql.Row) (Schema, error) {
-	ver := Schema{}
-
-	if err := row.Scan(&ver.Version, &ver.Checksum); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ver, nil
-		}
-
-		return Schema{}, fmt.Errorf("scan schema version: %w", err)
-	}
-
-	return ver, nil
 }
 
 func normalizedSha1(query string) string {
