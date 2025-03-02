@@ -20,18 +20,19 @@ func TestDialect(ctx context.Context, db *sql.DB, dialect types.Dialect) error {
 		return fmt.Errorf("fetch current schema version: %w", err)
 	}
 
-	sch := types.SchemaVersion{
+	ver1 := types.SchemaVersion{
 		ID:       0,
-		Version:  100,
-		Checksum: "checksum",
+		Version:  1,
+		Checksum: "checksum1",
 	}
 
-	if err := schemaops.SaveVersion(ctx, db, dialect, sch); err != nil {
-		return fmt.Errorf("save schema version: %w", err)
+	ver2 := types.SchemaVersion{
+		ID:       0,
+		Version:  2,
+		Checksum: "checksum2",
 	}
 
-	// Save twice to ensure we are upserting the same row.
-	if err := schemaops.SaveVersion(ctx, db, dialect, sch); err != nil {
+	if err := schemaops.SaveVersion(ctx, db, dialect, ver1); err != nil {
 		return fmt.Errorf("save schema version: %w", err)
 	}
 
@@ -44,8 +45,25 @@ func TestDialect(ctx context.Context, db *sql.DB, dialect types.Dialect) error {
 		return errors.New("schema version not found")
 	}
 
-	if !curr.Equal(&sch) {
-		return fmt.Errorf("schema version mismatch: got %+v, expected %+v", curr, &sch)
+	if !curr.Equal(&ver1) {
+		return fmt.Errorf("schema version mismatch: got %+v, expected %+v", curr, &ver1)
+	}
+
+	if err := schemaops.SaveVersion(ctx, db, dialect, ver2); err != nil {
+		return fmt.Errorf("save schema version: %w", err)
+	}
+
+	curr, err = schemaops.CurrentVersion(ctx, db, dialect)
+	if err != nil {
+		return fmt.Errorf("fetch updated schema version: %w", err)
+	}
+
+	if curr == nil {
+		return errors.New("schema version not found")
+	}
+
+	if !curr.Equal(&ver2) {
+		return fmt.Errorf("schema version mismatch: got %+v, expected %+v", curr, &ver1)
 	}
 
 	return nil
