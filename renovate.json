@@ -9,16 +9,9 @@
   "postUpdateOptions": ["gomodTidy"],
   "packageRules": [
     {
-      "matchFileNames": ["migrate_test/**"],
+      "description": "auto-update test dependencies; the library itself has no dependencies.",
+      "matchPackageNames": ["*"],
       "automerge": true
-    },
-    {
-      "matchPackageNames": ["golangci/golangci-lint"],
-      "automerge": true
-    },
-    {
-      "matchPackageNames": ["github.com/ladzaretti/migrate"],
-      "enabled": false
     }
   ]
 }
