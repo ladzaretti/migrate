@@ -41,10 +41,20 @@ import (
 	"github.com/ladzaretti/migrate/types"
 )
 
-// Checksum is a function type that generates a unique checksum for the input string.
-// It is used for schema validation and comparison in migrations.
+// Checksum computes a hash value for the given string.
+// It is used to validate and compare migration scripts.
 type Checksum func(s string) string
 
+// Filter filters migrations by their number,
+// returning true to apply the migration.
+//
+// Example:
+//
+//	// Skip the 4th migration
+//	skipForth := func(n int) bool { return n != 4 }
+//
+//	m := migrate.New(db, s.dialect, migrate.WithFilter(skipForth))
+//	n, err := m.Apply(fromStringSource(s.stringMigrations[0]))
 type Filter func(migrationNumber int) bool
 
 type Migrator struct {
@@ -59,6 +69,11 @@ type Migrator struct {
 
 type Opt func(*Migrator)
 
+// New creates a new Migrator with the provided database, dialect, and options.
+//
+// By default, transactions are enabled, and checksum is enabled using a
+// SHA-1 checksum function that is not affected by formatting (e.g., whitespaces).
+// These defaults can be customized using the [Opt] functions.
 func New(db *sql.DB, dialect types.Dialect, opts ...Opt) *Migrator {
 	m := &Migrator{
 		db:                     db,
