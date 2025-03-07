@@ -46,7 +46,7 @@ func TestDialect(ctx context.Context, db *sql.DB, dialect types.Dialect) error {
 	}
 
 	if !curr.Equal(&ver1) {
-		return fmt.Errorf("schema version mismatch: got %+v, expected %+v", curr, &ver1)
+		return fmt.Errorf("schema version mismatch: got %+v, want %+v", curr, &ver1)
 	}
 
 	if err := schemaops.SaveVersion(ctx, db, dialect, ver2); err != nil {
@@ -63,7 +63,7 @@ func TestDialect(ctx context.Context, db *sql.DB, dialect types.Dialect) error {
 	}
 
 	if !curr.Equal(&ver2) {
-		return fmt.Errorf("schema version mismatch: got %+v, expected %+v", curr, &ver1)
+		return fmt.Errorf("schema version mismatch: got %+v, want %+v", curr, &ver1)
 	}
 
 	return nil
