@@ -4,6 +4,8 @@ import (
 	"github.com/ladzaretti/migrate/types"
 )
 
+// SQLiteDialect provides the needed queries for managing schema versioning
+// for an SQLite database.
 type SQLiteDialect struct{}
 
 var _ types.Dialect = SQLiteDialect{}
@@ -32,6 +34,8 @@ func (d SQLiteDialect) SaveVersionQuery() string {
 	`
 }
 
+// PostgreSQLDialect provides the needed queries for managing schema versioning
+// for an PostgreSQL database.
 type PostgreSQLDialect struct{}
 
 var _ types.Dialect = PostgreSQLDialect{}

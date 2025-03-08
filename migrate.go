@@ -159,11 +159,11 @@ func errf(format string, a ...any) error {
 //	}
 //	m := migrate.New(db, s.dialect, opts...)
 //	m.Apply(migrations)
-func (m *Migrator) Apply(from Source) (int, error) {
+func (m *Migrator) Apply(from MigrationLister) (int, error) {
 	return m.ApplyContext(context.Background(), from)
 }
 
-func (m *Migrator) ApplyContext(ctx context.Context, from Source) (int, error) {
+func (m *Migrator) ApplyContext(ctx context.Context, from MigrationLister) (int, error) {
 	migrations, err := from.List()
 	if err != nil {
 		return 0, errf("list migrations source: %v", err)
