@@ -37,7 +37,7 @@ func createSQLiteDB(t *testing.T) *sql.DB {
 }
 
 func TestMigrateWithSQLite(t *testing.T) {
-	stringMigrations := []string{
+	rawMigrations := []string{
 		`CREATE TABLE
 			IF NOT EXISTS testing_migration_1 (
 				id INTEGER PRIMARY KEY,
@@ -58,7 +58,7 @@ func TestMigrateWithSQLite(t *testing.T) {
 		dbHelper:           createSQLiteDB,
 		dialect:            migrate.SQLiteDialect{},
 		embeddedMigrations: embeddedSQLiteMigrations,
-		stringMigrations:   stringMigrations,
+		rawMigrations:      rawMigrations,
 	})
 	if err != nil {
 		t.Fatalf("create test suite: %v", err)

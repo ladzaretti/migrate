@@ -45,7 +45,7 @@ func postgresTestContainer(ctx context.Context) (*postgres.PostgresContainer, er
 	return ctr, nil
 }
 
-func setupPostgresTestSuite(ctx context.Context, t *testing.T, stringMigrations []string, embeddedMigrations migrate.EmbeddedMigrations) (*testSuite, func()) {
+func setupPostgresTestSuite(ctx context.Context, t *testing.T, rawMigrations []string, embeddedMigrations migrate.EmbeddedMigrations) (*testSuite, func()) {
 	t.Helper()
 
 	ctr, err := postgresTestContainer(ctx)
@@ -84,7 +84,7 @@ func setupPostgresTestSuite(ctx context.Context, t *testing.T, stringMigrations 
 		dbHelper:           helper,
 		dialect:            migrate.PostgreSQLDialect{},
 		embeddedMigrations: embeddedMigrations,
-		stringMigrations:   stringMigrations,
+		rawMigrations:      rawMigrations,
 	})
 	if err != nil {
 		t.Fatalf("create test suite: %v", err)
@@ -94,7 +94,7 @@ func setupPostgresTestSuite(ctx context.Context, t *testing.T, stringMigrations 
 }
 
 func TestMigrateWithPostgres(t *testing.T) {
-	stringMigrations := []string{
+	rawMigrations := []string{
 		`CREATE TABLE
 			IF NOT EXISTS testing_migration_1 (
 				id INTEGER PRIMARY KEY,
@@ -111,7 +111,7 @@ func TestMigrateWithPostgres(t *testing.T) {
 		`,
 	}
 
-	suite, cleanup := setupPostgresTestSuite(context.Background(), t, stringMigrations, embeddedPostgresMigrations)
+	suite, cleanup := setupPostgresTestSuite(context.Background(), t, rawMigrations, embeddedPostgresMigrations)
 	defer cleanup()
 
 	t.Run("TestDialect", func(t *testing.T) {
