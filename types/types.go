@@ -14,6 +14,9 @@ type LimitedDB interface {
 
 // Dialect defines the necessary methods required
 // to handle schema versioning during migrations.
+//
+// An acceptance test [migratetest.TestDialect] is available for
+// verifying custom-defined Dialects.
 type Dialect interface {
 	// CreateVersionTableQuery returns the SQL query for creating the schema version table.
 	//
