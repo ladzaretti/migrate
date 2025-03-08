@@ -10,6 +10,13 @@ import (
 	"github.com/ladzaretti/migrate/types"
 )
 
+// TestDialect performs an acceptance test on the provided dialect,
+// verifying its behavior with schema versioning operations (create, retrieve, upsert).
+//
+// The following invariants are tested and must apply for any [types.Dialect]:
+//   - schema version table is created/exists
+//   - versions can be saved
+//   - new versions are upserted into the same row ID (=0)
 func TestDialect(ctx context.Context, db *sql.DB, dialect types.Dialect) error {
 	if err := schemaops.CreateTable(ctx, db, dialect); err != nil {
 		return fmt.Errorf("create schema version table: %w", err)
@@ -46,7 +53,7 @@ func TestDialect(ctx context.Context, db *sql.DB, dialect types.Dialect) error {
 	}
 
 	if !curr.Equal(&ver1) {
-		return fmt.Errorf("schema version mismatch: got %+v, expected %+v", curr, &ver1)
+		return fmt.Errorf("schema version mismatch: got %+v, want %+v", curr, &ver1)
 	}
 
 	if err := schemaops.SaveVersion(ctx, db, dialect, ver2); err != nil {
@@ -63,7 +70,7 @@ func TestDialect(ctx context.Context, db *sql.DB, dialect types.Dialect) error {
 	}
 
 	if !curr.Equal(&ver2) {
-		return fmt.Errorf("schema version mismatch: got %+v, expected %+v", curr, &ver1)
+		return fmt.Errorf("schema version mismatch: got %+v, want %+v", curr, &ver1)
 	}
 
 	return nil

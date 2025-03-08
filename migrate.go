@@ -41,11 +41,13 @@ import (
 	"github.com/ladzaretti/migrate/types"
 )
 
-// Checksum is a function type that generates a unique checksum for the input string.
-// It is used for schema validation and comparison in migrations.
+// Checksum computes a hash value for the given string.
+// It is used to validate and compare migration scripts.
 type Checksum func(s string) string
 
-type Filter func(migrationNumber int) bool
+// Filter is used to filter migrations by their index
+// in the execution order. Return true to apply the migration.
+type Filter func(migrationIndex int) bool
 
 type Migrator struct {
 	db                     *sql.DB
@@ -59,6 +61,11 @@ type Migrator struct {
 
 type Opt func(*Migrator)
 
+// New creates a new Migrator with the provided database, dialect, and options.
+//
+// By default, both transactions and checksum validation are enabled. The checksum
+// validation uses a SHA-1 function that ignores formatting (e.g., whitespaces).
+// These defaults can be customized using the [Opt] functions.
 func New(db *sql.DB, dialect types.Dialect, opts ...Opt) *Migrator {
 	m := &Migrator{
 		db:                     db,
@@ -76,9 +83,12 @@ func New(db *sql.DB, dialect types.Dialect, opts ...Opt) *Migrator {
 	return m
 }
 
+// WithChecksum sets a custom [Checksum] function or uses the default if nil.
 func WithChecksum(fn Checksum) Opt {
 	return func(m *Migrator) {
-		m.checksum = fn
+		if fn != nil {
+			m.checksum = fn
+		}
 	}
 }
 
@@ -94,12 +104,23 @@ func WithChecksumValidation(enabled bool) Opt {
 	}
 }
 
+// WithFilter is used to set a filtering function
+// to exclude certain scripts from being applied.
+//
+// Example:
+//
+//	// Skip the 4th migration
+//	skipForth := func(n int) bool { return n != 4 }
+//
+//	m := migrate.New(db, s.dialect, migrate.WithFilter(skipForth))
+//	n, err := m.Apply(migrations)
 func WithFilter(fn Filter) Opt {
 	return func(m *Migrator) {
 		m.migrationFilter = fn
 	}
 }
 
+// WithReapplyAll controls whether to reapply existing migrations.
 func WithReapplyAll(enabled bool) Opt {
 	return func(m *Migrator) {
 		m.reapplyAll = enabled
@@ -110,6 +131,34 @@ func errf(format string, a ...any) error {
 	return fmt.Errorf(format, a...)
 }
 
+// Apply applies the given migrations in the order they are provided.
+// Only unapplied migrations are applied.
+// That is, if the current schema version is n and n + k scripts are provided,
+// only the additional k will be applied.
+//
+// To re-apply all migrations, use the [WithReapplyAll] [Opt] function.
+//
+// The initial schema state is considered version 0.
+//
+// For each schema version, a cumulative checksum is calculated,
+// considering all previously applied migrations.
+// If an already applied migration has changed,
+// validation will fail, and no further migrations will be applied.
+//
+// It returns the number of migrations applied and any error encountered.
+//
+// With transactions enabled (default), any error triggers a rollback;
+// otherwise, migrations are applied sequentially until an error occurs or all are applied.
+//
+// To reset the schema and force re-application of migrations,
+// along with re-generating checksum values, use the following:
+//
+//	opts := []migrate.Opts{
+//		migrate.WithChecksumValidation(false),
+//		migrate.WithReapplyAll(true),
+//	}
+//	m := migrate.New(db, s.dialect, opts...)
+//	m.Apply(migrations)
 func (m *Migrator) Apply(from Source) (int, error) {
 	return m.ApplyContext(context.Background(), from)
 }
