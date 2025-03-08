@@ -13,7 +13,7 @@ import (
 // TestDialect performs an acceptance test on the provided dialect,
 // verifying its behavior with schema versioning operations (create, retrieve, upsert).
 //
-// The following invariants are tested and must apply for all [types.Dialect]:
+// The following invariants are tested and must apply for any [types.Dialect]:
 //   - schema version table is created/exists
 //   - versions can be saved
 //   - new versions are upserted into the same row ID (=0)

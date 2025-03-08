@@ -12,15 +12,15 @@ type LimitedDB interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-// Dialect defines the methods required for a database dialect
-// to manage schema versioning in migrations.
+// Dialect defines the necessary methods required
+// to handle schema versioning during migrations.
 type Dialect interface {
 	// CreateVersionTableQuery returns the SQL query for creating the schema version table.
 	//
 	// The schema version table must include columns to store the following data:
 	// 	- A column for the row ID,
 	// 	- A column for the schema version number,
-	// 	- A column for the checksum.
+	// 	- A column for the checksum string.
 	CreateVersionTableQuery() string
 
 	// CurrentVersionQuery returns the SQL query for retrieving the current schema version.
@@ -39,14 +39,13 @@ type Dialect interface {
 
 // SchemaVersion represents the schema version information for the database.
 type SchemaVersion struct {
-	// ID is the unique identifier for the schema version record.
+	// ID is the schema version row ID.
 	ID int
 
 	// Version is the current schema version number.
 	Version int
 
-	// Checksum is the cumulative checksum of all applied migrations,
-	// used to verify the integrity of the schema version.
+	// Checksum is the cumulative checksum of all applied migrations.
 	Checksum string
 }
 

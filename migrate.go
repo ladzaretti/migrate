@@ -45,17 +45,9 @@ import (
 // It is used to validate and compare migration scripts.
 type Checksum func(s string) string
 
-// Filter filters migrations by their number,
-// returning true to apply the migration.
-//
-// Example:
-//
-//	// Skip the 4th migration
-//	skipForth := func(n int) bool { return n != 4 }
-//
-//	m := migrate.New(db, s.dialect, migrate.WithFilter(skipForth))
-//	n, err := m.Apply(migrations)
-type Filter func(migrationNumber int) bool
+// Filter is used to filter migrations by their index
+// in the execution order. Return true to apply the migration.
+type Filter func(migrationIndex int) bool
 
 type Migrator struct {
 	db                     *sql.DB
@@ -71,9 +63,9 @@ type Opt func(*Migrator)
 
 // New creates a new Migrator with the provided database, dialect, and options.
 //
-// By default, transactions are enabled, and checksum is enabled using a
-// SHA-1 checksum function that is not affected by formatting (e.g., whitespaces).
-// These defaults can be changed using the [Opt] functions.
+// By default, both transactions and checksum validation are enabled. The checksum
+// validation uses a SHA-1 function that ignores formatting (e.g., whitespaces).
+// These defaults can be customized using the [Opt] functions.
 func New(db *sql.DB, dialect types.Dialect, opts ...Opt) *Migrator {
 	m := &Migrator{
 		db:                     db,
@@ -112,6 +104,16 @@ func WithChecksumValidation(enabled bool) Opt {
 	}
 }
 
+// WithFilter is used to set a filtering function
+// to exclude certain scripts from being applied.
+//
+// Example:
+//
+//	// Skip the 4th migration
+//	skipForth := func(n int) bool { return n != 4 }
+//
+//	m := migrate.New(db, s.dialect, migrate.WithFilter(skipForth))
+//	n, err := m.Apply(migrations)
 func WithFilter(fn Filter) Opt {
 	return func(m *Migrator) {
 		m.migrationFilter = fn
