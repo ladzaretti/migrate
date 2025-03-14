@@ -2,12 +2,12 @@ package migrate
 
 import (
 	"embed"
-	"path"
+	"path/filepath"
 )
 
-// MigrationLister is an interface that wraps the method for listing
-// the content of migration scripts to be applied, in the order they should be executed.
-type MigrationLister interface {
+// Lister is an interface that defines a method for listing
+// the contents of the underlying data source.
+type Lister interface {
 	List() ([]string, error)
 }
 
@@ -46,11 +46,11 @@ func (e EmbeddedMigrations) List() ([]string, error) {
 
 	ss := make([]string, 0, len(files))
 	for _, f := range files {
-		if f.Type().IsDir() {
+		if f.IsDir() {
 			continue
 		}
 
-		p := path.Join(e.Path, f.Name())
+		p := filepath.Join(e.Path, f.Name())
 		s, err := e.FS.ReadFile(p)
 		if err != nil {
 			return nil, errf("reading embedded migration file: %v", err)
