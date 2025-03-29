@@ -1,8 +1,8 @@
 .DEFAULT_GOAL = check
 
 # renovate: datasource=github-releases depName=golangci/golangci-lint
-GOLANGCI_VERSION ?= v1.64.8
-TEST_ARGS=-timeout 40s -coverpkg=github.com/ladzaretti/migrate
+GOLANGCI_VERSION ?= v2.0.2
+TEST_ARGS=-v -timeout 40s -coverpkg=github.com/ladzaretti/migrate
 
 bin/golangci-lint-${GOLANGCI_VERSION}:
 	@mkdir -p bin

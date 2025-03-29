@@ -1,6 +1,7 @@
 package migrate_test
 
 import (
+	"context"
 	"database/sql"
 	"embed"
 	"testing"
@@ -23,7 +24,7 @@ var (
 
 // createSQLiteDB is a testing helper that creates an in-memory sqlite
 // database connection.
-func createSQLiteDB(t *testing.T) *sql.DB {
+func createSQLiteDB(_ context.Context, t *testing.T) *sql.DB {
 	t.Helper()
 
 	db, err := sql.Open("sqlite", ":memory:")
@@ -31,7 +32,7 @@ func createSQLiteDB(t *testing.T) *sql.DB {
 		t.Fatalf("Failed to open database: %v", err)
 	}
 
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
 	return db
 }
@@ -65,7 +66,7 @@ func TestMigrateWithSQLite(t *testing.T) {
 	}
 
 	t.Run("TestDialect", func(t *testing.T) {
-		if err := migratetest.TestDialect(t.Context(), suite.dbHelper(t), migrate.SQLiteDialect{}); err != nil {
+		if err := migratetest.TestDialect(t.Context(), suite.dbHelper(t.Context(), t), migrate.SQLiteDialect{}); err != nil {
 			t.Fatalf("TestDialect: %v", err)
 		}
 	})

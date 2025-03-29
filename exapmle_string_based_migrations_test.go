@@ -21,7 +21,9 @@ func Example_applyStringBasedMigrations() {
 		fmt.Printf("open: %v", err)
 		return
 	}
-	defer db.Close()
+	defer func() { //nolint:wsl // false positive
+		_ = db.Close()
+	}()
 
 	m := migrate.New(db, migrate.SQLiteDialect{})
 

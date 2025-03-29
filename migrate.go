@@ -305,7 +305,6 @@ func applyMigration(ctx context.Context, db types.LimitedDB, dialect types.Diale
 
 func execContext(ctx context.Context, db types.LimitedDB, query string, args ...any) error {
 	if _, err := db.ExecContext(ctx, query, args...); err != nil {
-		//nolint:errorlint // errors are not intended to be matched by the user
 		return fmt.Errorf("exec context: %v", err)
 	}
 

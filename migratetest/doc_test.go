@@ -17,7 +17,9 @@ func ExampleTestDialect() {
 		fmt.Printf("open: %v", err)
 		return
 	}
-	defer db.Close()
+	defer func() { //nolint:wsl // false positive
+		_ = db.Close()
+	}()
 
 	if err := TestDialect(context.Background(), db, migrate.SQLiteDialect{}); err != nil {
 		fmt.Printf("TestDialect: %v", err)

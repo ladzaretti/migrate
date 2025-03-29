@@ -57,14 +57,15 @@ func setupPostgresTestSuite(ctx context.Context, t *testing.T, rawMigrations []s
 	if err != nil {
 		t.Fatalf("connection string: %v", err)
 	}
+
 	cleanup := func() {
 		_ = testcontainers.TerminateContainer(ctr)
 	}
 
-	helper := func(t *testing.T) *sql.DB {
+	helper := func(ctx context.Context, t *testing.T) *sql.DB {
 		t.Helper()
 
-		if err := ctr.Restore(context.Background()); err != nil {
+		if err := ctr.Restore(ctx); err != nil {
 			t.Fatalf("restore database: %v", err)
 		}
 
@@ -74,7 +75,7 @@ func setupPostgresTestSuite(ctx context.Context, t *testing.T, rawMigrations []s
 		}
 
 		t.Cleanup(func() {
-			db.Close()
+			_ = db.Close()
 		})
 
 		return db
@@ -111,11 +112,11 @@ func TestMigrateWithPostgres(t *testing.T) {
 		`,
 	}
 
-	suite, cleanup := setupPostgresTestSuite(context.Background(), t, rawMigrations, embeddedPostgresMigrations)
+	suite, cleanup := setupPostgresTestSuite(t.Context(), t, rawMigrations, embeddedPostgresMigrations)
 	defer cleanup()
 
 	t.Run("TestDialect", func(t *testing.T) {
-		if err := migratetest.TestDialect(t.Context(), suite.dbHelper(t), migrate.PostgreSQLDialect{}); err != nil {
+		if err := migratetest.TestDialect(t.Context(), suite.dbHelper(t.Context(), t), migrate.PostgreSQLDialect{}); err != nil {
 			t.Fatalf("TestDialect: %v", err)
 		}
 	})

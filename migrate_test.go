@@ -13,7 +13,7 @@ import (
 )
 
 type testSuiteConfig struct {
-	dbHelper           func(*testing.T) *sql.DB
+	dbHelper           func(context.Context, *testing.T) *sql.DB
 	dialect            types.Dialect
 	embeddedMigrations migrate.EmbeddedMigrations
 	rawMigrations      []string
@@ -41,7 +41,7 @@ func newTestSuite(conf testSuiteConfig) (*testSuite, error) {
 }
 
 func (s *testSuite) applyStringMigrations(t *testing.T) {
-	db := s.dbHelper(t)
+	db := s.dbHelper(t.Context(), t)
 	m := migrate.New(db, s.dialect)
 
 	if got, want := currentSchemaVersion(m), -1; got != want {
@@ -65,6 +65,7 @@ func (s *testSuite) applyStringMigrations(t *testing.T) {
 	if err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
 	}
+
 	if got, want := n, len(s.rawMigrations)-1; got != want {
 		t.Errorf("applied migrations: got %d, want %d", got, want)
 	}
@@ -75,7 +76,7 @@ func (s *testSuite) applyStringMigrations(t *testing.T) {
 }
 
 func (s *testSuite) applyEmbeddedMigrations(t *testing.T) {
-	db := s.dbHelper(t)
+	db := s.dbHelper(t.Context(), t)
 	m := migrate.New(db, s.dialect)
 
 	migrations, _ := s.embeddedMigrations.List()
@@ -112,7 +113,7 @@ func (s *testSuite) applyEmbeddedMigrations(t *testing.T) {
 }
 
 func (s *testSuite) applyWithTxDisabled(t *testing.T) {
-	db := s.dbHelper(t)
+	db := s.dbHelper(t.Context(), t)
 
 	opts := []migrate.Opt{
 		migrate.WithTransaction(false),
@@ -140,7 +141,7 @@ func (s *testSuite) applyWithTxDisabled(t *testing.T) {
 }
 
 func (s *testSuite) applyWithNoChecksumValidation(t *testing.T) {
-	db := s.dbHelper(t)
+	db := s.dbHelper(t.Context(), t)
 	opts := []migrate.Opt{
 		migrate.WithChecksumValidation(false),
 	}
@@ -200,7 +201,7 @@ func (s *testSuite) applyWithNoChecksumValidation(t *testing.T) {
 }
 
 func (s *testSuite) applyWithFilter(t *testing.T) {
-	db := s.dbHelper(t)
+	db := s.dbHelper(t.Context(), t)
 	opts := []migrate.Opt{
 		migrate.WithFilter(func(migrationNumber int) bool {
 			return migrationNumber != 1
@@ -262,7 +263,7 @@ func (s *testSuite) applyWithFilter(t *testing.T) {
 }
 
 func (s *testSuite) reapplyAll(t *testing.T) {
-	db := s.dbHelper(t)
+	db := s.dbHelper(t.Context(), t)
 	m := migrate.New(db, s.dialect)
 
 	n, err := m.Apply(stringMigrationsFrom(s.rawMigrations...))
@@ -298,7 +299,7 @@ func (s *testSuite) reapplyAll(t *testing.T) {
 }
 
 func (s *testSuite) rollsBackOnSQLError(t *testing.T) {
-	db := s.dbHelper(t)
+	db := s.dbHelper(t.Context(), t)
 	m := migrate.New(db, s.dialect)
 
 	if got, want := currentSchemaVersion(m), -1; got != want {
@@ -309,6 +310,7 @@ func (s *testSuite) rollsBackOnSQLError(t *testing.T) {
 	if err != nil {
 		t.Errorf("m.Apply() returned an error: %v", err)
 	}
+
 	if got, want := n, 1; got != want {
 		t.Errorf("applied migrations: got %d, want %d", got, want)
 	}
@@ -342,7 +344,7 @@ func (s *testSuite) rollsBackOnSQLError(t *testing.T) {
 }
 
 func (s *testSuite) rollsBackOnValidationError(t *testing.T) {
-	db := s.dbHelper(t)
+	db := s.dbHelper(t.Context(), t)
 	m := migrate.New(db, s.dialect)
 
 	if got, want := currentSchemaVersion(m), -1; got != want {
@@ -385,7 +387,6 @@ func (s *testSuite) rollsBackOnValidationError(t *testing.T) {
 	//
 
 	n, err = m.Apply(stringMigrationsFrom(corrupted...))
-
 	if err == nil {
 		t.Errorf("expected an error but got none")
 	}

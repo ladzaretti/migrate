@@ -45,12 +45,14 @@ func (e EmbeddedMigrations) List() ([]string, error) {
 	}
 
 	ss := make([]string, 0, len(files))
+
 	for _, f := range files {
 		if f.IsDir() {
 			continue
 		}
 
 		p := filepath.Join(e.Path, f.Name())
+
 		s, err := e.FS.ReadFile(p)
 		if err != nil {
 			return nil, errf("reading embedded migration file: %v", err)

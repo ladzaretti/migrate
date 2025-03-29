@@ -10,7 +10,7 @@ type SQLiteDialect struct{}
 
 var _ types.Dialect = SQLiteDialect{}
 
-func (d SQLiteDialect) CreateVersionTableQuery() string {
+func (SQLiteDialect) CreateVersionTableQuery() string {
 	return `
 		CREATE TABLE
 			IF NOT EXISTS schema_version (
@@ -21,11 +21,11 @@ func (d SQLiteDialect) CreateVersionTableQuery() string {
 		`
 }
 
-func (d SQLiteDialect) CurrentVersionQuery() string {
+func (SQLiteDialect) CurrentVersionQuery() string {
 	return `SELECT id, version, checksum FROM schema_version;`
 }
 
-func (d SQLiteDialect) SaveVersionQuery() string {
+func (SQLiteDialect) SaveVersionQuery() string {
 	return `
         	INSERT INTO schema_version (id, version, checksum)
         	VALUES (0, $1, $2)
@@ -40,7 +40,7 @@ type PostgreSQLDialect struct{}
 
 var _ types.Dialect = PostgreSQLDialect{}
 
-func (d PostgreSQLDialect) CreateVersionTableQuery() string {
+func (PostgreSQLDialect) CreateVersionTableQuery() string {
 	return `
 		CREATE TABLE
 			IF NOT EXISTS schema_version (
@@ -51,11 +51,11 @@ func (d PostgreSQLDialect) CreateVersionTableQuery() string {
 	`
 }
 
-func (d PostgreSQLDialect) CurrentVersionQuery() string {
+func (PostgreSQLDialect) CurrentVersionQuery() string {
 	return `SELECT id, version, checksum FROM schema_version;`
 }
 
-func (d PostgreSQLDialect) SaveVersionQuery() string {
+func (PostgreSQLDialect) SaveVersionQuery() string {
 	return `
 		INSERT INTO schema_version (id, version, checksum)
 		VALUES (0, $1, $2)
