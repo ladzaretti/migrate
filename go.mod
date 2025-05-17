@@ -3,7 +3,7 @@ module github.com/ladzaretti/migrate
 go 1.24.0
 
 require (
-	github.com/jackc/pgx/v5 v5.7.4
+	github.com/jackc/pgx/v5 v5.7.5
 	github.com/testcontainers/testcontainers-go v0.37.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.37.0
 	modernc.org/sqlite v1.37.0
