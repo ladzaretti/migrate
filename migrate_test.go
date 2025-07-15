@@ -326,7 +326,7 @@ func (s *testSuite) rollsBackOnSQLError(t *testing.T) {
 
 	n, err = m.Apply(stringMigrationsFrom(corrupted...))
 	if err == nil {
-		t.Errorf("expected an error but got none")
+		t.Error("expected an error but got none")
 	}
 
 	if got, want := n, 0; got != want {
@@ -388,7 +388,7 @@ func (s *testSuite) rollsBackOnValidationError(t *testing.T) {
 
 	n, err = m.Apply(stringMigrationsFrom(corrupted...))
 	if err == nil {
-		t.Errorf("expected an error but got none")
+		t.Error("expected an error but got none")
 	}
 
 	if got, want := n, 0; got != want {
