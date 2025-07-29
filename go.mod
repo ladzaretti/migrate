@@ -6,7 +6,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.5
 	github.com/testcontainers/testcontainers-go v0.38.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.38.0
-	modernc.org/sqlite v1.38.1
+	modernc.org/sqlite v1.38.2
 )
 
 require (
